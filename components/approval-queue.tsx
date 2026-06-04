@@ -65,12 +65,15 @@ const DEMO_APPROVALS: Approval[] = [
 ]
 
 export function ApprovalQueue() {
-  const { data: approvals, isLoading, mutate } = useSWR<Approval[]>('/api/approvals', fetcher, {
+  const { data: rawApprovals, isLoading, mutate } = useSWR<Approval[]>('/api/approvals', fetcher, {
     refreshInterval: 5000,
-    fallbackData: DEMO_APPROVALS,
   })
-  const { data: agents } = useSWR<Agent[]>('/api/agents', fetcher)
+  const { data: rawAgents } = useSWR<Agent[]>('/api/agents', fetcher)
   const [processingId, setProcessingId] = useState<number | null>(null)
+
+  // Use demo data if API returns error or non-array response
+  const approvals = Array.isArray(rawApprovals) ? rawApprovals : DEMO_APPROVALS
+  const agents = Array.isArray(rawAgents) ? rawAgents : []
 
   const getAgent = (agentId: number) => agents?.find((a) => a.id === agentId)
 

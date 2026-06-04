@@ -9,19 +9,31 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const COLORS = ['#00d4ff', '#0099cc', '#006699', '#003366', '#001a33']
 
+// Demo data for hackathon
+const DEMO_AGENTS: Agent[] = [
+  { id: 1, name: 'Acme Corp AI Squad', description: '', status: 'active', tier: 'enterprise', parent_agent_id: null, monthly_cost_usd: 5000, created_at: '', updated_at: '' },
+  { id: 2, name: 'DataFlow Pipeline', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 2500, created_at: '', updated_at: '' },
+  { id: 3, name: 'ContentGen Pro', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 1500, created_at: '', updated_at: '' },
+  { id: 4, name: 'Support Bot', description: '', status: 'paused', tier: 'basic', parent_agent_id: null, monthly_cost_usd: 500, created_at: '', updated_at: '' },
+  { id: 5, name: 'DataFlow - Ingestion', description: '', status: 'active', tier: 'pro', parent_agent_id: 2, monthly_cost_usd: 1000, created_at: '', updated_at: '' },
+]
+
 export function CostDashboard() {
-  const { data: agents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: rawAgents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 10000,
   })
+
+  // Use demo data if API returns error or non-array response
+  const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
 
   if (isLoading) {
     return <div className="h-96 bg-muted rounded-lg animate-pulse" />
   }
 
-  const totalCost = agents?.reduce((sum, a) => sum + a.monthly_cost_usd, 0) || 0
-  const activeCost = agents?.filter((a) => a.status === 'active').reduce((sum, a) => sum + a.monthly_cost_usd, 0) || 0
+  const totalCost = agents.reduce((sum, a) => sum + a.monthly_cost_usd, 0)
+  const activeCost = agents.filter((a) => a.status === 'active').reduce((sum, a) => sum + a.monthly_cost_usd, 0)
 
-  const costByTier = agents?.reduce(
+  const costByTier = agents.reduce(
     (acc, agent) => {
       const existing = acc.find((item) => item.tier === agent.tier)
       if (existing) {
@@ -32,9 +44,9 @@ export function CostDashboard() {
       return acc
     },
     [] as { tier: string; cost: number }[],
-  ) || []
+  )
 
-  const costByStatus = agents?.reduce(
+  const costByStatus = agents.reduce(
     (acc, agent) => {
       const existing = acc.find((item) => item.status === agent.status)
       if (existing) {
@@ -45,7 +57,7 @@ export function CostDashboard() {
       return acc
     },
     [] as { status: string; cost: number }[],
-  ) || []
+  )
 
   return (
     <div className="space-y-6">
@@ -116,7 +128,7 @@ export function CostDashboard() {
         </div>
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {agents
-            ?.sort((a, b) => b.monthly_cost_usd - a.monthly_cost_usd)
+            .sort((a, b) => b.monthly_cost_usd - a.monthly_cost_usd)
             .map((agent) => (
               <div key={agent.id} className="flex items-center justify-between text-sm p-2 rounded hover:bg-muted/50">
                 <span className="truncate flex-1">{agent.name}</span>

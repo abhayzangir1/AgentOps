@@ -134,10 +134,12 @@ const DEMO_AGENTS: Agent[] = [
 ]
 
 export function AgentRegistry() {
-  const { data: agents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: rawAgents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 5000,
-    fallbackData: DEMO_AGENTS,
   })
+
+  // Use demo data if API returns error or non-array response
+  const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 

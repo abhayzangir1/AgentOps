@@ -70,7 +70,8 @@ export function ActivityMonitor() {
     },
   )
 
-  const activities = rawActivities || DEMO_ACTIVITIES
+  // Use demo data if API returns error or non-array response
+  const activities = Array.isArray(rawActivities) ? rawActivities : DEMO_ACTIVITIES
 
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
