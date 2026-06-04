@@ -62,10 +62,15 @@ const DEMO_ACTIVITIES: ActivityEvent[] = [
 ]
 
 export function ActivityMonitor() {
-  const { data: activities, isLoading } = useSWR<ActivityEvent[]>('/api/activity?limit=15', fetcher, {
-    refreshInterval: 5000,
-    fallbackData: DEMO_ACTIVITIES,
-  })
+  const { data: rawActivities, isLoading } = useSWR<ActivityEvent[] | undefined>(
+    '/api/activity?limit=15',
+    fetcher,
+    {
+      refreshInterval: 5000,
+    },
+  )
+
+  const activities = rawActivities || DEMO_ACTIVITIES
 
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
