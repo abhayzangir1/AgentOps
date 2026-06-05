@@ -128,16 +128,16 @@ export function CostDashboard() {
         </div>
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {agents
-            .sort((a, b) => b.monthly_cost_usd - a.monthly_cost_usd)
+            .sort((a, b) => Number(b.monthly_cost_usd) - Number(a.monthly_cost_usd))
             .map((agent) => (
               <div key={agent.id} className="flex items-center justify-between text-sm p-2 rounded hover:bg-muted/50">
                 <span className="truncate flex-1">{agent.name}</span>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-xs text-muted-foreground">${agent.monthly_cost_usd.toFixed(2)}</span>
+                  <span className="text-xs text-muted-foreground">${Number(agent.monthly_cost_usd).toFixed(2)}</span>
                   <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-accent"
-                      style={{ width: `${(agent.monthly_cost_usd / totalCost) * 100}%` }}
+                      style={{ width: `${(Number(agent.monthly_cost_usd) / totalCost) * 100}%` }}
                     />
                   </div>
                 </div>
