@@ -3,22 +3,24 @@
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { TrendingUp, DollarSign, Activity, Pause } from 'lucide-react'
+import { TrendingUp, DollarSign, Activity, Pause, Download, AlertTriangle, Edit2 } from 'lucide-react'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const DEMO_AGENTS: Agent[] = [
-  { id: 1, name: 'Acme Corp AI Squad', description: '', status: 'active', tier: 'enterprise', parent_agent_id: null, monthly_cost_usd: 5000, created_at: '', updated_at: '' },
-  { id: 2, name: 'DataFlow Pipeline', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 2500, created_at: '', updated_at: '' },
-  { id: 3, name: 'ContentGen Pro', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 1500, created_at: '', updated_at: '' },
-  { id: 4, name: 'Support Bot', description: '', status: 'paused', tier: 'basic', parent_agent_id: null, monthly_cost_usd: 500, created_at: '', updated_at: '' },
+  { id: 1, name: 'Acme Corp AI Squad', description: '', status: 'active', tier: 'enterprise', parent_agent_id: null, monthly_cost_usd: 5000, budget_limit_usd: 6000, created_at: '', updated_at: '' },
+  { id: 2, name: 'DataFlow Pipeline', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 2500, budget_limit_usd: 3000, created_at: '', updated_at: '' },
+  { id: 3, name: 'ContentGen Pro', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 1500, budget_limit_usd: null, created_at: '', updated_at: '' },
+  { id: 4, name: 'Support Bot', description: '', status: 'paused', tier: 'basic', parent_agent_id: null, monthly_cost_usd: 500, budget_limit_usd: 500, created_at: '', updated_at: '' },
 ]
 
 export function CostDashboard() {
   const [mounted, setMounted] = useState(false)
-  const { data: rawAgents, isLoading, error } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: rawAgents, isLoading, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 10000,
   })
+  const [editingBudget, setEditingBudget] = useState<number | null>(null)
+  const [budgetValue, setBudgetValue] = useState('')
 
   useEffect(() => {
     setMounted(true)
@@ -33,6 +35,14 @@ export function CostDashboard() {
   const totalCost = agents.reduce((sum, a) => sum + (Number(a.monthly_cost_usd) || 0), 0) || 1
   const activeCost = agents.filter((a) => a.status === 'active').reduce((sum, a) => sum + (Number(a.monthly_cost_usd) || 0), 0)
   const pausedCost = totalCost - activeCost
+
+  // Budget alerts
+  const budgetAlerts = agents.filter((a) => {
+    if (!a.budget_limit_usd) return false
+    const cost = Number(a.monthly_cost_usd) || 0
+    const limit = Number(a.budget_limit_usd)
+    return cost >= limit * 0.8 // 80% or more of budget
+  })
 
   // Group by tier
   const costByTier = agents.reduce((acc, agent) => {
@@ -49,8 +59,81 @@ export function CostDashboard() {
     unknown: 'bg-gray-500',
   }
 
+  const exportToCSV = () => {
+    const headers = ['Agent ID', 'Name', 'Status', 'Tier', 'Monthly Cost', 'Budget Limit', 'Budget Usage %']
+    const rows = agents.map((a) => {
+      const cost = Number(a.monthly_cost_usd) || 0
+      const limit = a.budget_limit_usd ? Number(a.budget_limit_usd) : null
+      const usage = limit ? ((cost / limit) * 100).toFixed(1) : 'N/A'
+      return [a.id, a.name, a.status, a.tier, cost, limit || 'No limit', usage]
+    })
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `cost-report-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const saveBudgetLimit = async (agentId: number) => {
+    try {
+      await fetch(`/api/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          budget_limit_usd: budgetValue ? parseFloat(budgetValue) : null 
+        }),
+      })
+      mutate()
+      setEditingBudget(null)
+      setBudgetValue('')
+    } catch (error) {
+      console.error('Failed to update budget:', error)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Export Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={exportToCSV}
+          className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+        >
+          <Download size={16} />
+          Export Report
+        </button>
+      </div>
+
+      {/* Budget Alerts */}
+      {budgetAlerts.length > 0 && (
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+          <div className="flex items-center gap-2 text-yellow-600 mb-2">
+            <AlertTriangle size={16} />
+            <span className="font-semibold text-sm">Budget Alerts</span>
+          </div>
+          <div className="space-y-1">
+            {budgetAlerts.map((agent) => {
+              const cost = Number(agent.monthly_cost_usd) || 0
+              const limit = Number(agent.budget_limit_usd)
+              const percent = ((cost / limit) * 100).toFixed(0)
+              return (
+                <p key={agent.id} className="text-sm text-yellow-700">
+                  {agent.name}: ${cost.toLocaleString()} / ${limit.toLocaleString()} ({percent}% used)
+                </p>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Top Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-lg border border-border bg-muted/30">
@@ -76,14 +159,14 @@ export function CostDashboard() {
         </div>
         <div className="p-4 rounded-lg border border-border bg-muted/30">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingUp size={16} />
-            <span className="text-xs">Agent Count</span>
+            <AlertTriangle size={16} />
+            <span className="text-xs">Budget Alerts</span>
           </div>
-          <p className="text-2xl font-bold">{agents.length}</p>
+          <p className="text-2xl font-bold text-yellow-500">{budgetAlerts.length}</p>
         </div>
       </div>
 
-      {/* Cost by Tier - Simple Bar Chart */}
+      {/* Cost by Tier */}
       <div className="p-4 rounded-lg border border-border bg-card">
         <h3 className="text-sm font-semibold mb-4">Cost by Agent Tier</h3>
         <div className="space-y-3">
@@ -106,39 +189,82 @@ export function CostDashboard() {
         </div>
       </div>
 
-      {/* Agent Cost Breakdown */}
+      {/* Agent Budget Management */}
       <div className="p-4 rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={16} className="text-accent" />
-          <h3 className="text-sm font-semibold">Agent Cost Breakdown</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} className="text-accent" />
+            <h3 className="text-sm font-semibold">Agent Budget Management</h3>
+          </div>
         </div>
-        <div className="space-y-2 max-h-64 overflow-y-auto">
+        <div className="space-y-2 max-h-80 overflow-y-auto">
           {agents
             .sort((a, b) => (Number(b.monthly_cost_usd) || 0) - (Number(a.monthly_cost_usd) || 0))
             .map((agent) => {
               const cost = Number(agent.monthly_cost_usd) || 0
+              const limit = agent.budget_limit_usd ? Number(agent.budget_limit_usd) : null
+              const usagePercent = limit ? (cost / limit) * 100 : 0
+              const isOverBudget = limit && cost > limit
+              const isNearBudget = limit && cost >= limit * 0.8
+
               return (
-                <div key={agent.id} className="flex items-center justify-between text-sm p-2 rounded hover:bg-muted/50">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className={`w-2 h-2 rounded-full ${agent.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                    <span className="truncate">{agent.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-muted-foreground">${cost.toLocaleString()}</span>
-                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-accent"
-                        style={{ width: `${(cost / totalCost) * 100}%` }}
-                      />
+                <div key={agent.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50 border border-border">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${agent.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                      <span className="text-sm font-medium truncate">{agent.name}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cost: ${cost.toLocaleString()}
+                      {limit && (
+                        <span className={isOverBudget ? 'text-red-500' : isNearBudget ? 'text-yellow-500' : ''}>
+                          {' '}/ ${limit.toLocaleString()} ({usagePercent.toFixed(0)}%)
+                        </span>
+                      )}
+                    </p>
                   </div>
+                  
+                  {editingBudget === agent.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={budgetValue}
+                        onChange={(e) => setBudgetValue(e.target.value)}
+                        placeholder="Limit"
+                        className="w-24 px-2 py-1 text-sm bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent"
+                      />
+                      <button
+                        onClick={() => saveBudgetLimit(agent.id)}
+                        className="px-2 py-1 text-xs bg-accent text-accent-foreground rounded"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => { setEditingBudget(null); setBudgetValue('') }}
+                        className="px-2 py-1 text-xs border border-border rounded"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingBudget(agent.id)
+                        setBudgetValue(limit?.toString() || '')
+                      }}
+                      className="p-2 rounded hover:bg-muted transition-colors"
+                      title="Set budget limit"
+                    >
+                      <Edit2 size={14} className="text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
               )
             })}
         </div>
       </div>
 
-      {/* Cost by Status - Simple Pie representation */}
+      {/* Cost by Status */}
       <div className="p-4 rounded-lg border border-border bg-card">
         <h3 className="text-sm font-semibold mb-4">Cost Distribution by Status</h3>
         <div className="flex items-center gap-8">

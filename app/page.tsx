@@ -9,8 +9,9 @@ import { CostDashboard } from '@/components/cost-dashboard'
 import { AuditLog } from '@/components/audit-log'
 import { QuickStats } from '@/components/quick-stats'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { PermissionHierarchy } from '@/components/permission-hierarchy'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
@@ -21,6 +22,7 @@ export default function DashboardPage() {
     { id: 'agents' as const, label: 'Agent Registry' },
     { id: 'approvals' as const, label: 'Approvals' },
     { id: 'costs' as const, label: 'Cost Intelligence' },
+    { id: 'permissions' as const, label: 'Permissions' },
     { id: 'audit' as const, label: 'Audit Log' },
   ]
 
@@ -154,13 +156,25 @@ export default function DashboardPage() {
           )}
 
           {activeTab === 'audit' && (
-            <div className="max-w-3xl space-y-6">
+            <div className="max-w-4xl space-y-6">
               <div>
                 <h2 className="text-2xl font-bold mb-1">Audit Log</h2>
                 <p className="text-sm text-muted-foreground">Immutable record of all system events</p>
               </div>
               <div className="border border-border rounded-lg p-6 bg-card">
                 <AuditLog />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'permissions' && (
+            <div className="max-w-4xl space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Permission Hierarchy</h2>
+                <p className="text-sm text-muted-foreground">View and manage agent permissions with recursive inheritance</p>
+              </div>
+              <div className="border border-border rounded-lg p-6 bg-card">
+                <PermissionHierarchy />
               </div>
             </div>
           )}

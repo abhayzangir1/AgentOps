@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { ChevronDown, CircleDot, Pause, Play } from 'lucide-react'
+import { ChevronDown, CircleDot, Pause, Play, Plus, Eye } from 'lucide-react'
+import { AgentFormDialog } from './agent-form-dialog'
+import { AgentDetailPanel } from './agent-detail-panel'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -143,6 +145,9 @@ export function AgentRegistry() {
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
   const toggleExpanded = (id: number) => {
     const newSet = new Set(expandedIds)
@@ -185,8 +190,26 @@ export function AgentRegistry() {
   const topLevelAgents = agents?.filter((a) => !a.parent_agent_id) || []
   const childAgents = (parentId: number) => agents?.filter((a) => a.parent_agent_id === parentId) || []
 
+  const handleAgentClick = (agent: Agent, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedAgent(agent)
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Header with Create Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+        >
+          <Plus size={16} />
+          Add Agent
+        </button>
+      </div>
+
+      {/* Agent List */}
+      <div className="space-y-3">
       {topLevelAgents.map((agent) => {
         const children = childAgents(agent.id)
         const isExpanded = expandedIds.has(agent.id)
@@ -194,11 +217,11 @@ export function AgentRegistry() {
         return (
           <div key={agent.id} className="border border-border rounded-lg overflow-hidden">
             {/* Parent Agent */}
-            <button
-              onClick={() => toggleExpanded(agent.id)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-3 flex-1 text-left">
+            <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
+              <button
+                onClick={() => toggleExpanded(agent.id)}
+                className="flex items-center gap-3 flex-1 text-left"
+              >
                 <CircleDot
                   size={16}
                   className={`flex-shrink-0 ${
@@ -209,14 +232,21 @@ export function AgentRegistry() {
                   <h4 className="font-medium text-sm">{agent.name}</h4>
                   <p className="text-xs text-muted-foreground">{agent.tier} • ${agent.monthly_cost_usd}/mo</p>
                 </div>
-              </div>
-              {children.length > 0 && (
-                <ChevronDown
-                  size={16}
-                  className={`flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                />
-              )}
-            </button>
+                {children.length > 0 && (
+                  <ChevronDown
+                    size={16}
+                    className={`flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                )}
+              </button>
+              <button
+                onClick={(e) => handleAgentClick(agent, e)}
+                className="p-2 rounded hover:bg-muted transition-colors ml-2"
+                title="View details"
+              >
+                <Eye size={16} className="text-muted-foreground" />
+              </button>
+            </div>
 
             {/* Child Agents */}
             {isExpanded && children.length > 0 && (
@@ -235,17 +265,26 @@ export function AgentRegistry() {
                         <p className="text-xs text-muted-foreground">${child.monthly_cost_usd}/mo</p>
                       </div>
                     </div>
-                    <button 
-                      onClick={(e) => toggleAgentStatus(child, e)}
-                      disabled={togglingId === child.id}
-                      className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50"
-                    >
-                      {child.status === 'active' ? (
-                        <Pause size={14} className="text-muted-foreground" />
-                      ) : (
-                        <Play size={14} className="text-muted-foreground" />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleAgentClick(child, e)}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                        title="View details"
+                      >
+                        <Eye size={14} className="text-muted-foreground" />
+                      </button>
+                      <button 
+                        onClick={(e) => toggleAgentStatus(child, e)}
+                        disabled={togglingId === child.id}
+                        className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {child.status === 'active' ? (
+                          <Pause size={14} className="text-muted-foreground" />
+                        ) : (
+                          <Play size={14} className="text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -253,6 +292,30 @@ export function AgentRegistry() {
           </div>
         )
       })}
+      </div>
+
+      {/* Create/Edit Dialog */}
+      <AgentFormDialog
+        isOpen={showCreateDialog || !!editingAgent}
+        onClose={() => {
+          setShowCreateDialog(false)
+          setEditingAgent(null)
+        }}
+        onSuccess={() => mutate()}
+        parentAgents={topLevelAgents}
+        editAgent={editingAgent}
+      />
+
+      {/* Detail Panel */}
+      <AgentDetailPanel
+        agent={selectedAgent}
+        onClose={() => setSelectedAgent(null)}
+        onEdit={(agent) => {
+          setSelectedAgent(null)
+          setEditingAgent(agent)
+        }}
+        onStatusChange={() => mutate()}
+      />
     </div>
   )
 }
