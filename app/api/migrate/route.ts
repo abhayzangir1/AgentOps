@@ -40,6 +40,49 @@ export async function POST() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name)
     `)
 
+    // Fix permissions table schema for recursive CTE
+    await query(`
+      DO $$ 
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'permissions' AND column_name = 'permission_type'
+        ) THEN
+          DROP TABLE IF EXISTS permissions CASCADE;
+        END IF;
+      END $$;
+    `)
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS permissions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        permission_level VARCHAR(50) NOT NULL CHECK (permission_level IN ('view', 'edit', 'admin', 'approve')),
+        granted_by_user_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, agent_id)
+      )
+    `)
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_permissions_user ON permissions(user_id)
+    `)
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_permissions_agent ON permissions(agent_id)
+    `)
+
+    // Seed initial permissions for demo user (user_id = 1)
+    const agents = await query(`SELECT id FROM agents`)
+    for (const agent of agents.rows) {
+      await query(`
+        INSERT INTO permissions (user_id, agent_id, permission_level)
+        VALUES (1, $1, 'admin')
+        ON CONFLICT (user_id, agent_id) DO NOTHING
+      `, [agent.id])
+    }
+
     // Set default budget limits based on tier
     await query(`
       UPDATE agents SET budget_limit_usd = 
@@ -59,7 +102,9 @@ export async function POST() {
         'Added capability_scopes column',
         'Added escalation_policy column',
         'Created performance indexes',
-        'Set default budget limits by tier'
+        'Set default budget limits by tier',
+        'Fixed permissions table for recursive CTE',
+        'Seeded admin permissions for all agents'
       ]
     })
   } catch (error) {
