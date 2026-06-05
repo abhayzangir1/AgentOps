@@ -30,16 +30,17 @@ export function CostDashboard() {
     return <div className="h-96 bg-muted rounded-lg animate-pulse" />
   }
 
-  const totalCost = agents.reduce((sum, a) => sum + Number(a.monthly_cost_usd), 0)
-  const activeCost = agents.filter((a) => a.status === 'active').reduce((sum, a) => sum + Number(a.monthly_cost_usd), 0)
+  const totalCost = agents.reduce((sum, a) => sum + Number(a.monthly_cost_usd || 0), 0) || 1
+  const activeCost = agents.filter((a) => a.status === 'active').reduce((sum, a) => sum + Number(a.monthly_cost_usd || 0), 0)
 
   const costByTier = agents.reduce(
     (acc, agent) => {
       const existing = acc.find((item) => item.tier === agent.tier)
+      const cost = Number(agent.monthly_cost_usd || 0)
       if (existing) {
-        existing.cost += Number(agent.monthly_cost_usd)
+        existing.cost += cost
       } else {
-        acc.push({ tier: agent.tier, cost: Number(agent.monthly_cost_usd) })
+        acc.push({ tier: agent.tier, cost })
       }
       return acc
     },
@@ -49,10 +50,11 @@ export function CostDashboard() {
   const costByStatus = agents.reduce(
     (acc, agent) => {
       const existing = acc.find((item) => item.status === agent.status)
+      const cost = Number(agent.monthly_cost_usd || 0)
       if (existing) {
-        existing.cost += Number(agent.monthly_cost_usd)
+        existing.cost += cost
       } else {
-        acc.push({ status: agent.status, cost: Number(agent.monthly_cost_usd) })
+        acc.push({ status: agent.status, cost })
       }
       return acc
     },
