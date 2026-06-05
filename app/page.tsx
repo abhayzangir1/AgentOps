@@ -8,6 +8,7 @@ import { ApprovalQueue } from '@/components/approval-queue'
 import { CostDashboard } from '@/components/cost-dashboard'
 import { AuditLog } from '@/components/audit-log'
 import { QuickStats } from '@/components/quick-stats'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit'
 
@@ -145,7 +146,9 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Track and optimize agent operational expenses</p>
               </div>
               <div className="border border-border rounded-lg p-6 bg-card">
-                <CostDashboard />
+                <ErrorBoundary fallback={<div className="text-center py-8 text-muted-foreground">Failed to load cost dashboard. Please refresh.</div>}>
+                  <CostDashboard />
+                </ErrorBoundary>
               </div>
             </div>
           )}

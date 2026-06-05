@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(activities)
   } catch (error) {
     console.error('[v0] GET /api/activity error:', error)
-    return NextResponse.json({ error: 'Failed to fetch activity' }, { status: 500 })
+    // Return empty array instead of error to prevent UI crashes
+    return NextResponse.json([])
   }
 }
 
