@@ -2,76 +2,21 @@
 
 import useSWR from 'swr'
 import { ActivityEvent } from '@/lib/dynamodb'
-import { CheckCircle, AlertCircle, Clock, TrendingUp } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, TrendingUp, RefreshCw, Database } from 'lucide-react'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-// Demo data for hackathon
-const DEMO_ACTIVITIES: ActivityEvent[] = [
-  {
-    eventId: '1',
-    agentId: 1,
-    eventType: 'execution',
-    description: 'DataFlow-Ingestion processed 15,847 records',
-    status: 'success',
-    costUSD: 2.45,
-    duration: 3240,
-    timestamp: Date.now() - 120000,
-    metadata: { recordsProcessed: 15847 },
-  },
-  {
-    eventId: '2',
-    agentId: 2,
-    eventType: 'approval',
-    description: 'Resource upgrade request pending review',
-    status: 'pending',
-    timestamp: Date.now() - 240000,
-    metadata: { currentTier: 'pro', requestedTier: 'enterprise' },
-  },
-  {
-    eventId: '3',
-    agentId: 3,
-    eventType: 'deployment',
-    description: 'ContentGen-Blog deployed v2.1.0',
-    status: 'success',
-    costUSD: 0.78,
-    duration: 1820,
-    timestamp: Date.now() - 360000,
-    metadata: { version: 'v2.1.0', environment: 'production' },
-  },
-  {
-    eventId: '4',
-    agentId: 2,
-    eventType: 'execution',
-    description: 'Analytics engine computed hourly metrics',
-    status: 'success',
-    costUSD: 1.2,
-    duration: 1560,
-    timestamp: Date.now() - 600000,
-    metadata: { metricsCount: 2847 },
-  },
-  {
-    eventId: '5',
-    agentId: 4,
-    eventType: 'error',
-    description: 'Support-Tier2 rate limit exceeded',
-    status: 'failed',
-    timestamp: Date.now() - 720000,
-    metadata: { requestsPerMinute: 450, limit: 400 },
-  },
-]
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch')
+  return r.json()
+})
 
 export function ActivityMonitor() {
-  const { data: rawActivities, isLoading } = useSWR<ActivityEvent[] | undefined>(
+  const { data: activities, isLoading, error, mutate } = useSWR<ActivityEvent[]>(
     '/api/activity?limit=15',
     fetcher,
     {
       refreshInterval: 5000,
     },
   )
-
-  // Use demo data if API returns error or non-array response
-  const activities = Array.isArray(rawActivities) ? rawActivities : DEMO_ACTIVITIES
 
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
@@ -111,9 +56,36 @@ export function ActivityMonitor() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <AlertCircle size={32} className="text-destructive mb-3" />
+        <p className="text-sm font-medium mb-1">Failed to Load Activity</p>
+        <p className="text-xs text-muted-foreground mb-3">Could not connect to DynamoDB</p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-2 px-3 py-1.5 bg-accent text-accent-foreground rounded text-xs"
+        >
+          <RefreshCw size={14} />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (!activities || activities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <Database size={32} className="text-muted-foreground mb-3" />
+        <p className="text-sm font-medium mb-1">No Activity Yet</p>
+        <p className="text-xs text-muted-foreground">Agent activity will appear here in real-time</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
-      {(activities || []).map((activity) => (
+      {activities.map((activity) => (
         <div
           key={activity.eventId}
           className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group"

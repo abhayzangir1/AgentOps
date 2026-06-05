@@ -3,20 +3,16 @@
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { TrendingUp, DollarSign, Activity, Pause, Download, AlertTriangle, Edit2 } from 'lucide-react'
+import { TrendingUp, DollarSign, Activity, Pause, Download, AlertTriangle, Edit2, RefreshCw } from 'lucide-react'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-const DEMO_AGENTS: Agent[] = [
-  { id: 1, name: 'Acme Corp AI Squad', description: '', status: 'active', tier: 'enterprise', parent_agent_id: null, monthly_cost_usd: 5000, budget_limit_usd: 6000, created_at: '', updated_at: '' },
-  { id: 2, name: 'DataFlow Pipeline', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 2500, budget_limit_usd: 3000, created_at: '', updated_at: '' },
-  { id: 3, name: 'ContentGen Pro', description: '', status: 'active', tier: 'pro', parent_agent_id: null, monthly_cost_usd: 1500, budget_limit_usd: null, created_at: '', updated_at: '' },
-  { id: 4, name: 'Support Bot', description: '', status: 'paused', tier: 'basic', parent_agent_id: null, monthly_cost_usd: 500, budget_limit_usd: 500, created_at: '', updated_at: '' },
-]
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch')
+  return r.json()
+})
 
 export function CostDashboard() {
   const [mounted, setMounted] = useState(false)
-  const { data: rawAgents, isLoading, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: agents, isLoading, error, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 10000,
   })
   const [editingBudget, setEditingBudget] = useState<number | null>(null)
@@ -26,10 +22,27 @@ export function CostDashboard() {
     setMounted(true)
   }, [])
 
-  const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
-
   if (!mounted || isLoading) {
     return <div className="h-96 bg-muted rounded-lg animate-pulse" />
+  }
+
+  if (error || !agents) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <AlertTriangle size={48} className="text-destructive mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Failed to Load Cost Data</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Could not connect to Aurora PostgreSQL database
+        </p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm"
+        >
+          <RefreshCw size={16} />
+          Retry
+        </button>
+      </div>
+    )
   }
 
   const totalCost = agents.reduce((sum, a) => sum + (Number(a.monthly_cost_usd) || 0), 0) || 1

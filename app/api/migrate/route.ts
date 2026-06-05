@@ -35,6 +35,11 @@ export async function POST() {
       CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)
     `)
 
+    // Add unique constraint on name for upsert support
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name)
+    `)
+
     // Set default budget limits based on tier
     await query(`
       UPDATE agents SET budget_limit_usd = 
