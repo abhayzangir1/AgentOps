@@ -1,9 +1,22 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import dynamic from 'next/dynamic'
 import { TrendingUp } from 'lucide-react'
+
+// Dynamic import for Recharts to avoid SSR issues
+const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false })
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false })
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false })
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false })
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false })
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false })
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false })
+const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false })
+const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false })
+const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false })
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -19,14 +32,19 @@ const DEMO_AGENTS: Agent[] = [
 ]
 
 export function CostDashboard() {
+  const [mounted, setMounted] = useState(false)
   const { data: rawAgents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 10000,
   })
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // Use demo data if API returns error or non-array response
   const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
 
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return <div className="h-96 bg-muted rounded-lg animate-pulse" />
   }
 
