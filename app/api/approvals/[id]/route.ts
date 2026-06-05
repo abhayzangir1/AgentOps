@@ -48,6 +48,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Approval not found' }, { status: 404 })
     }
 
+    // Record audit log
+    if (status) {
+      const approval = result.rows[0]
+      await query(
+        `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
+         VALUES ($1, $2, $3, $4)`,
+        [approval.agent_id, `approval_${status}`, 1, JSON.stringify({ notes: notes || 'No notes' })],
+      )
+    }
+
     return NextResponse.json(result.rows[0] as Approval)
   } catch (error) {
     console.error('[v0] PATCH /api/approvals/[id] error:', error)

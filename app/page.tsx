@@ -6,8 +6,10 @@ import { AgentRegistry } from '@/components/agent-registry'
 import { ActivityMonitor } from '@/components/activity-monitor'
 import { ApprovalQueue } from '@/components/approval-queue'
 import { CostDashboard } from '@/components/cost-dashboard'
+import { AuditLog } from '@/components/audit-log'
+import { QuickStats } from '@/components/quick-stats'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
@@ -18,6 +20,7 @@ export default function DashboardPage() {
     { id: 'agents' as const, label: 'Agent Registry' },
     { id: 'approvals' as const, label: 'Approvals' },
     { id: 'costs' as const, label: 'Cost Intelligence' },
+    { id: 'audit' as const, label: 'Audit Log' },
   ]
 
   return (
@@ -104,20 +107,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="border border-border rounded-lg p-6 bg-card">
                     <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Total Agents</p>
-                        <p className="text-3xl font-bold text-accent">11</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Pending Approvals</p>
-                        <p className="text-3xl font-bold text-yellow-500">3</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Monthly Budget</p>
-                        <p className="text-3xl font-bold text-green-500">$10,500</p>
-                      </div>
-                    </div>
+                    <QuickStats />
                   </div>
                 </div>
               </div>
@@ -156,6 +146,18 @@ export default function DashboardPage() {
               </div>
               <div className="border border-border rounded-lg p-6 bg-card">
                 <CostDashboard />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'audit' && (
+            <div className="max-w-3xl space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Audit Log</h2>
+                <p className="text-sm text-muted-foreground">Immutable record of all system events</p>
+              </div>
+              <div className="border border-border rounded-lg p-6 bg-card">
+                <AuditLog />
               </div>
             </div>
           )}

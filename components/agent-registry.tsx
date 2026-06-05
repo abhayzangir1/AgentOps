@@ -134,7 +134,7 @@ const DEMO_AGENTS: Agent[] = [
 ]
 
 export function AgentRegistry() {
-  const { data: rawAgents, isLoading } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: rawAgents, isLoading, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 5000,
   })
 
@@ -142,6 +142,7 @@ export function AgentRegistry() {
   const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const toggleExpanded = (id: number) => {
     const newSet = new Set(expandedIds)
@@ -151,6 +152,24 @@ export function AgentRegistry() {
       newSet.add(id)
     }
     setExpandedIds(newSet)
+  }
+
+  const toggleAgentStatus = async (agent: Agent, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setTogglingId(agent.id)
+    try {
+      const newStatus = agent.status === 'active' ? 'paused' : 'active'
+      await fetch(`/api/agents/${agent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      mutate()
+    } catch (error) {
+      console.error('Failed to toggle agent status:', error)
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   if (isLoading) {
@@ -216,7 +235,11 @@ export function AgentRegistry() {
                         <p className="text-xs text-muted-foreground">${child.monthly_cost_usd}/mo</p>
                       </div>
                     </div>
-                    <button className="p-1.5 rounded hover:bg-muted transition-colors">
+                    <button 
+                      onClick={(e) => toggleAgentStatus(child, e)}
+                      disabled={togglingId === child.id}
+                      className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50"
+                    >
                       {child.status === 'active' ? (
                         <Pause size={14} className="text-muted-foreground" />
                       ) : (
