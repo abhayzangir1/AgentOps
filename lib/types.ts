@@ -6,8 +6,21 @@ export interface Agent {
   tier: 'basic' | 'pro' | 'enterprise'
   parent_agent_id: number | null
   monthly_cost_usd: number
+  budget_limit_usd: number | null
   created_at: string
   updated_at: string
+}
+
+export interface ActivityEvent {
+  eventId: string
+  agentId: number
+  eventType: 'execution' | 'error' | 'approval' | 'deployment'
+  description: string
+  costUSD?: number
+  duration?: number
+  status: 'success' | 'pending' | 'failed'
+  timestamp: number
+  metadata?: Record<string, any>
 }
 
 export interface Approval {

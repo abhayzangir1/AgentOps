@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     const agentId = parseInt(id, 10)
     const body = await req.json()
-    const { status, name, description, tier, monthly_cost_usd } = body
+    const { status, name, description, tier, monthly_cost_usd, budget_limit_usd, parent_agent_id } = body
 
     const updates: string[] = []
     const values: any[] = []
@@ -32,6 +32,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.push(`monthly_cost_usd = $${paramIndex++}`)
       values.push(monthly_cost_usd)
     }
+    if (budget_limit_usd !== undefined) {
+      updates.push(`budget_limit_usd = $${paramIndex++}`)
+      values.push(budget_limit_usd)
+    }
+    if (parent_agent_id !== undefined) {
+      updates.push(`parent_agent_id = $${paramIndex++}`)
+      values.push(parent_agent_id)
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -42,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const result = await query(
       `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIndex}
-       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, created_at, updated_at`,
+       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, created_at, updated_at`,
       values,
     )
 
