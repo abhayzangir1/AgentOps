@@ -20,8 +20,9 @@ export interface ActivityEvent {
   metadata?: Record<string, any>
 }
 
-const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'agentops-activity'
+const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'aws-dynamodb-almond-drawer-agentops'
 const PK = process.env.DYNAMODB_TABLE_PARTITION_KEY || 'eventId'
+const SK = 'SK-agentops' // Sort key for the DynamoDB table
 
 // Lazy-initialize the client to avoid blocking on module load
 let docClient: DynamoDBDocumentClient | null = null
@@ -57,7 +58,7 @@ export async function recordActivity(event: Omit<ActivityEvent, 'eventId'>): Pro
   await getDocClient().send(
     new PutCommand({
       TableName: TABLE_NAME,
-      Item: { [PK]: eventId, ...fullEvent },
+      Item: { [PK]: eventId, [SK]: `activity#${event.timestamp}`, ...fullEvent },
     }),
   )
 
