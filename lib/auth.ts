@@ -43,16 +43,18 @@ export function setSessionCookie(token: string): {
   value: string
   httpOnly: boolean
   secure: boolean
-  sameSite: 'lax'
+  sameSite: 'none'
   path: string
   maxAge: number
 } {
+  // SameSite=None + Secure is required so the session cookie is accepted
+  // inside the cross-origin HTTPS preview iframe (and any embedded context).
   return {
     name: COOKIE_NAME,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none',
     path: '/',
     maxAge: EXPIRES_IN,
   }

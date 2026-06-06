@@ -33,7 +33,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   } catch {
     const response = NextResponse.redirect(new URL('/login', request.url))
-    response.cookies.set({ name: COOKIE_NAME, value: '', maxAge: 0, path: '/' })
+    response.cookies.set({
+      name: COOKIE_NAME,
+      value: '',
+      maxAge: 0,
+      path: '/',
+      secure: true,
+      sameSite: 'none',
+    })
     return response
   }
 }
