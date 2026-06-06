@@ -1,145 +1,388 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { TrendingUp, DollarSign, Activity, Pause, Download, AlertTriangle, Edit2, RefreshCw } from 'lucide-react'
+import {
+  DollarSign,
+  TrendingUp,
+  Pause,
+  Play,
+  Download,
+  AlertTriangle,
+  Edit2,
+  RefreshCw,
+  ShieldOff,
+  BarChart3,
+  Zap,
+  X,
+} from 'lucide-react'
 
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error('Failed to fetch')
-  return r.json()
-})
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error('Failed to fetch')
+    return r.json()
+  })
+
+const TIER_CAPS: Record<string, number> = {
+  enterprise: 10000,
+  pro: 3000,
+  basic: 1000,
+}
+
+const TIER_COLOR: Record<string, string> = {
+  enterprise: 'bg-accent',
+  pro: 'bg-blue-500',
+  basic: 'bg-emerald-500',
+}
+
+function BudgetBar({
+  cost,
+  limit,
+  paused,
+}: {
+  cost: number
+  limit: number | null
+  paused: boolean
+}) {
+  const cap = limit ?? 0
+  if (cap === 0) return <div className="h-1.5 bg-muted rounded-full" />
+  const pct = Math.min((cost / cap) * 100, 100)
+  const isOver = pct >= 100
+  const isNear = pct >= 80
+
+  return (
+    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all ${
+          paused ? 'bg-muted-foreground' : isOver ? 'bg-red-500' : isNear ? 'bg-yellow-500' : 'bg-accent'
+        }`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  )
+}
+
+function AgentCostRow({
+  agent,
+  onPause,
+  onEditBudget,
+}: {
+  agent: Agent
+  onPause: (agent: Agent) => void
+  onEditBudget: (agent: Agent) => void
+}) {
+  const cost = Number(agent.monthly_cost_usd) || 0
+  const limit = agent.budget_limit_usd ? Number(agent.budget_limit_usd) : null
+  const tierCap = TIER_CAPS[agent.tier] ?? 1000
+  const pct = limit ? Math.min((cost / limit) * 100, 100) : 0
+  const isOver = limit ? cost >= limit : false
+  const isNear = limit ? cost >= limit * 0.8 : false
+  const isRunaway = cost > tierCap * 0.9
+
+  return (
+    <div
+      className={`p-3 rounded-lg border transition-colors ${
+        isOver
+          ? 'border-red-500/30 bg-red-500/5'
+          : isRunaway
+          ? 'border-orange-500/30 bg-orange-500/5'
+          : 'border-border hover:bg-muted/20'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        {/* Status dot */}
+        <div
+          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            agent.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground'
+          }`}
+        />
+
+        {/* Name + tier */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium truncate">{agent.name}</span>
+            {(isOver || isRunaway) && (
+              <ShieldOff size={12} className={isOver ? 'text-red-400' : 'text-orange-400'} />
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                TIER_COLOR[agent.tier] ?? 'bg-muted'
+              } text-black`}
+            >
+              {agent.tier}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              ${cost.toLocaleString()}
+              {limit ? ` / $${limit.toLocaleString()}` : ' / no cap'}
+            </span>
+            {limit && (
+              <span
+                className={`text-xs font-semibold ${
+                  isOver ? 'text-red-400' : isNear ? 'text-yellow-400' : 'text-muted-foreground'
+                }`}
+              >
+                ({pct.toFixed(0)}%)
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => onEditBudget(agent)}
+            className="p-1.5 rounded hover:bg-muted transition-colors"
+            title="Set budget cap"
+          >
+            <Edit2 size={13} className="text-muted-foreground" />
+          </button>
+          <button
+            onClick={() => onPause(agent)}
+            className={`p-1.5 rounded transition-colors ${
+              isOver
+                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                : 'hover:bg-muted text-muted-foreground'
+            }`}
+            title={agent.status === 'active' ? 'Pause agent' : 'Resume agent'}
+          >
+            {agent.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Budget bar */}
+      <div className="mt-2">
+        <BudgetBar cost={cost} limit={limit} paused={agent.status !== 'active'} />
+      </div>
+    </div>
+  )
+}
 
 export function CostDashboard() {
-  const [mounted, setMounted] = useState(false)
-  const { data: agents, isLoading, error, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
-    refreshInterval: 10000,
-  })
-  const [editingBudget, setEditingBudget] = useState<number | null>(null)
+  const {
+    data: agents,
+    isLoading,
+    error,
+    mutate,
+  } = useSWR<Agent[]>('/api/agents', fetcher, { refreshInterval: 10000 })
+
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [budgetValue, setBudgetValue] = useState('')
+  const [savingBudget, setSavingBudget] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted || isLoading) {
-    return <div className="h-96 bg-muted rounded-lg animate-pulse" />
+  if (isLoading) {
+    return <div className="h-96 bg-muted/40 rounded-xl animate-pulse" />
   }
 
   if (error || !agents) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <AlertTriangle size={48} className="text-destructive mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Failed to Load Cost Data</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Could not connect to Aurora PostgreSQL database
-        </p>
+      <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+        <AlertTriangle size={28} className="text-destructive" />
+        <div>
+          <p className="text-sm font-medium">Failed to load cost data</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Cannot reach Aurora PostgreSQL</p>
+        </div>
         <button
           onClick={() => mutate()}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-accent-foreground rounded text-xs font-medium"
         >
-          <RefreshCw size={16} />
+          <RefreshCw size={12} />
           Retry
         </button>
       </div>
     )
   }
 
-  const totalCost = agents.reduce((sum, a) => sum + (Number(a.monthly_cost_usd) || 0), 0) || 1
-  const activeCost = agents.filter((a) => a.status === 'active').reduce((sum, a) => sum + (Number(a.monthly_cost_usd) || 0), 0)
+  const totalCost = agents.reduce((s, a) => s + (Number(a.monthly_cost_usd) || 0), 0)
+  const activeCost = agents
+    .filter((a) => a.status === 'active')
+    .reduce((s, a) => s + (Number(a.monthly_cost_usd) || 0), 0)
   const pausedCost = totalCost - activeCost
 
-  // Budget alerts
   const budgetAlerts = agents.filter((a) => {
     if (!a.budget_limit_usd) return false
-    const cost = Number(a.monthly_cost_usd) || 0
-    const limit = Number(a.budget_limit_usd)
-    return cost >= limit * 0.8 // 80% or more of budget
+    return Number(a.monthly_cost_usd) >= Number(a.budget_limit_usd) * 0.8
   })
 
-  // Group by tier
-  const costByTier = agents.reduce((acc, agent) => {
-    const tier = agent.tier || 'unknown'
-    const cost = Number(agent.monthly_cost_usd) || 0
-    acc[tier] = (acc[tier] || 0) + cost
-    return acc
-  }, {} as Record<string, number>)
+  const runawayAgents = agents.filter((a) => {
+    const tierCap = TIER_CAPS[a.tier] ?? 1000
+    return Number(a.monthly_cost_usd) > tierCap * 0.9 && a.status === 'active'
+  })
 
-  const tierColors: Record<string, string> = {
-    enterprise: 'bg-accent',
-    pro: 'bg-blue-500',
-    basic: 'bg-green-500',
-    unknown: 'bg-gray-500',
-  }
+  const costByTier = agents.reduce(
+    (acc, a) => {
+      acc[a.tier] = (acc[a.tier] || 0) + (Number(a.monthly_cost_usd) || 0)
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 
-  const exportToCSV = () => {
-    const headers = ['Agent ID', 'Name', 'Status', 'Tier', 'Monthly Cost', 'Budget Limit', 'Budget Usage %']
-    const rows = agents.map((a) => {
-      const cost = Number(a.monthly_cost_usd) || 0
-      const limit = a.budget_limit_usd ? Number(a.budget_limit_usd) : null
-      const usage = limit ? ((cost / limit) * 100).toFixed(1) : 'N/A'
-      return [a.id, a.name, a.status, a.tier, cost, limit || 'No limit', usage]
+  const handlePause = async (agent: Agent) => {
+    const newStatus = agent.status === 'active' ? 'paused' : 'active'
+    await fetch(`/api/agents/${agent.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
     })
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `cost-report-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+    mutate()
   }
 
-  const saveBudgetLimit = async (agentId: number) => {
+  const handleSaveBudget = async () => {
+    if (!editingAgent) return
+    setSavingBudget(true)
     try {
-      await fetch(`/api/agents/${agentId}`, {
+      await fetch(`/api/agents/${editingAgent.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          budget_limit_usd: budgetValue ? parseFloat(budgetValue) : null 
+        body: JSON.stringify({
+          budget_limit_usd: budgetValue ? parseFloat(budgetValue) : null,
         }),
       })
       mutate()
-      setEditingBudget(null)
+      setEditingAgent(null)
       setBudgetValue('')
-    } catch (error) {
-      console.error('Failed to update budget:', error)
+    } finally {
+      setSavingBudget(false)
     }
+  }
+
+  const exportCSV = () => {
+    const headers = ['ID', 'Name', 'Status', 'Tier', 'Monthly Cost', 'Budget Limit', 'Usage %']
+    const rows = agents.map((a) => {
+      const cost = Number(a.monthly_cost_usd) || 0
+      const limit = a.budget_limit_usd ? Number(a.budget_limit_usd) : null
+      return [
+        a.id,
+        a.name,
+        a.status,
+        a.tier,
+        cost,
+        limit ?? 'No cap',
+        limit ? `${((cost / limit) * 100).toFixed(1)}%` : 'N/A',
+      ]
+    })
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cost-report-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
     <div className="space-y-6">
-      {/* Export Button */}
-      <div className="flex justify-end">
+      {/* Budget edit modal */}
+      {editingAgent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Set Budget Cap</h3>
+              <button
+                onClick={() => { setEditingAgent(null); setBudgetValue('') }}
+                className="p-1 rounded hover:bg-muted transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">{editingAgent.name}</p>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">
+                Monthly budget cap (USD) — leave empty to remove
+              </label>
+              <input
+                type="number"
+                value={budgetValue}
+                onChange={(e) => setBudgetValue(e.target.value)}
+                placeholder={`Tier max: $${TIER_CAPS[editingAgent.tier]?.toLocaleString()}`}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Current spend: ${(Number(editingAgent.monthly_cost_usd) || 0).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveBudget}
+                disabled={savingBudget}
+                className="flex-1 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {savingBudget ? 'Saving...' : 'Save Cap'}
+              </button>
+              <button
+                onClick={() => { setEditingAgent(null); setBudgetValue('') }}
+                className="px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BarChart3 size={16} />
+          <span>{agents.length} agents tracked</span>
+        </div>
         <button
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+          onClick={exportCSV}
+          className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
         >
-          <Download size={16} />
-          Export Report
+          <Download size={14} />
+          Export CSV
         </button>
       </div>
 
-      {/* Budget Alerts */}
+      {/* Runaway alert */}
+      {runawayAgents.length > 0 && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldOff size={16} className="text-red-400" />
+            <span className="text-sm font-semibold text-red-400">
+              {runawayAgents.length} runaway agent{runawayAgents.length > 1 ? 's' : ''} detected
+            </span>
+          </div>
+          <p className="text-xs text-red-300/80 mb-3">
+            These agents are approaching their tier spending cap. Consider pausing or setting a hard budget limit.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {runawayAgents.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => handlePause(a)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 text-xs font-medium rounded-lg transition-colors"
+              >
+                <Pause size={11} />
+                Pause {a.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Budget alerts */}
       {budgetAlerts.length > 0 && (
-        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-600 mb-2">
-            <AlertTriangle size={16} />
-            <span className="font-semibold text-sm">Budget Alerts</span>
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-yellow-400" />
+            <span className="text-sm font-semibold text-yellow-400">Budget alerts ({budgetAlerts.length})</span>
           </div>
           <div className="space-y-1">
-            {budgetAlerts.map((agent) => {
-              const cost = Number(agent.monthly_cost_usd) || 0
-              const limit = Number(agent.budget_limit_usd)
-              const percent = ((cost / limit) * 100).toFixed(0)
+            {budgetAlerts.map((a) => {
+              const cost = Number(a.monthly_cost_usd) || 0
+              const limit = Number(a.budget_limit_usd)
+              const pct = ((cost / limit) * 100).toFixed(0)
               return (
-                <p key={agent.id} className="text-sm text-yellow-700">
-                  {agent.name}: ${cost.toLocaleString()} / ${limit.toLocaleString()} ({percent}% used)
+                <p key={a.id} className="text-xs text-yellow-300/80">
+                  {a.name}: ${cost.toLocaleString()} / ${limit.toLocaleString()} —{' '}
+                  <strong>{pct}%</strong> of cap used
                 </p>
               )
             })}
@@ -147,175 +390,84 @@ export function CostDashboard() {
         </div>
       )}
 
-      {/* Top Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-lg border border-border bg-muted/30">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <DollarSign size={16} />
-            <span className="text-xs">Total Monthly</span>
+      {/* Top metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Monthly', value: `$${totalCost.toLocaleString()}`, icon: DollarSign, color: 'text-accent' },
+          { label: 'Active Spend', value: `$${activeCost.toLocaleString()}`, icon: Zap, color: 'text-emerald-400' },
+          { label: 'Paused Spend', value: `$${pausedCost.toLocaleString()}`, icon: Pause, color: 'text-yellow-400' },
+          { label: 'Budget Alerts', value: String(budgetAlerts.length), icon: AlertTriangle, color: 'text-orange-400' },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="p-4 rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+              <Icon size={14} />
+              <span className="text-xs">{label}</span>
+            </div>
+            <p className={`text-2xl font-bold ${color}`}>{value}</p>
           </div>
-          <p className="text-2xl font-bold text-accent">${totalCost.toLocaleString()}</p>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-muted/30">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Activity size={16} />
-            <span className="text-xs">Active Agents</span>
-          </div>
-          <p className="text-2xl font-bold text-green-500">${activeCost.toLocaleString()}</p>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-muted/30">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Pause size={16} />
-            <span className="text-xs">Paused Agents</span>
-          </div>
-          <p className="text-2xl font-bold text-yellow-500">${pausedCost.toLocaleString()}</p>
-        </div>
-        <div className="p-4 rounded-lg border border-border bg-muted/30">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <AlertTriangle size={16} />
-            <span className="text-xs">Budget Alerts</span>
-          </div>
-          <p className="text-2xl font-bold text-yellow-500">{budgetAlerts.length}</p>
-        </div>
+        ))}
       </div>
 
-      {/* Cost by Tier */}
-      <div className="p-4 rounded-lg border border-border bg-card">
-        <h3 className="text-sm font-semibold mb-4">Cost by Agent Tier</h3>
+      {/* Cost by tier */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={15} className="text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Spend by tier</h3>
+        </div>
         <div className="space-y-3">
           {Object.entries(costByTier)
             .sort(([, a], [, b]) => b - a)
-            .map(([tier, cost]) => (
-              <div key={tier} className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="capitalize">{tier}</span>
-                  <span className="text-muted-foreground">${cost.toLocaleString()}</span>
-                </div>
-                <div className="h-3 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${tierColors[tier] || 'bg-accent'} transition-all`}
-                    style={{ width: `${(cost / totalCost) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* Agent Budget Management */}
-      <div className="p-4 rounded-lg border border-border bg-card">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp size={16} className="text-accent" />
-            <h3 className="text-sm font-semibold">Agent Budget Management</h3>
-          </div>
-        </div>
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {agents
-            .sort((a, b) => (Number(b.monthly_cost_usd) || 0) - (Number(a.monthly_cost_usd) || 0))
-            .map((agent) => {
-              const cost = Number(agent.monthly_cost_usd) || 0
-              const limit = agent.budget_limit_usd ? Number(agent.budget_limit_usd) : null
-              const usagePercent = limit ? (cost / limit) * 100 : 0
-              const isOverBudget = limit && cost > limit
-              const isNearBudget = limit && cost >= limit * 0.8
-
+            .map(([tier, cost]) => {
+              const cap = TIER_CAPS[tier] ?? 1000
+              const total = agents.filter((a) => a.tier === tier).length
               return (
-                <div key={agent.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50 border border-border">
-                  <div className="flex-1 min-w-0">
+                <div key={tier} className="space-y-1.5">
+                  <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${agent.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                      <span className="text-sm font-medium truncate">{agent.name}</span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                          TIER_COLOR[tier] ?? 'bg-muted'
+                        } text-black`}
+                      >
+                        {tier}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{total} agents</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Cost: ${cost.toLocaleString()}
-                      {limit && (
-                        <span className={isOverBudget ? 'text-red-500' : isNearBudget ? 'text-yellow-500' : ''}>
-                          {' '}/ ${limit.toLocaleString()} ({usagePercent.toFixed(0)}%)
-                        </span>
-                      )}
-                    </p>
+                    <span className="text-sm font-medium">${cost.toLocaleString()}</span>
                   </div>
-                  
-                  {editingBudget === agent.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={budgetValue}
-                        onChange={(e) => setBudgetValue(e.target.value)}
-                        placeholder="Limit"
-                        className="w-24 px-2 py-1 text-sm bg-background border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent"
-                      />
-                      <button
-                        onClick={() => saveBudgetLimit(agent.id)}
-                        className="px-2 py-1 text-xs bg-accent text-accent-foreground rounded"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => { setEditingBudget(null); setBudgetValue('') }}
-                        className="px-2 py-1 text-xs border border-border rounded"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingBudget(agent.id)
-                        setBudgetValue(limit?.toString() || '')
-                      }}
-                      className="p-2 rounded hover:bg-muted transition-colors"
-                      title="Set budget limit"
-                    >
-                      <Edit2 size={14} className="text-muted-foreground" />
-                    </button>
-                  )}
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${TIER_COLOR[tier] ?? 'bg-accent'}`}
+                      style={{ width: `${Math.min((cost / totalCost) * 100, 100)}%` }}
+                    />
+                  </div>
                 </div>
               )
             })}
         </div>
       </div>
 
-      {/* Cost by Status */}
-      <div className="p-4 rounded-lg border border-border bg-card">
-        <h3 className="text-sm font-semibold mb-4">Cost Distribution by Status</h3>
-        <div className="flex items-center gap-8">
-          <div className="relative w-32 h-32">
-            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="20"
-                className="text-green-500"
-                strokeDasharray={`${(activeCost / totalCost) * 251.2} 251.2`}
+      {/* Per-agent management */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign size={15} className="text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Per-agent budget enforcement</h3>
+          <span className="text-xs text-muted-foreground ml-auto">Click edit to set cap · pause to freeze spend</span>
+        </div>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {[...agents]
+            .sort((a, b) => (Number(b.monthly_cost_usd) || 0) - (Number(a.monthly_cost_usd) || 0))
+            .map((agent) => (
+              <AgentCostRow
+                key={agent.id}
+                agent={agent}
+                onPause={handlePause}
+                onEditBudget={(a) => {
+                  setEditingAgent(a)
+                  setBudgetValue(a.budget_limit_usd ? String(a.budget_limit_usd) : '')
+                }}
               />
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="20"
-                className="text-yellow-500"
-                strokeDasharray={`${(pausedCost / totalCost) * 251.2} 251.2`}
-                strokeDashoffset={`-${(activeCost / totalCost) * 251.2}`}
-              />
-            </svg>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-green-500" />
-              <span className="text-sm">Active: ${activeCost.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-yellow-500" />
-              <span className="text-sm">Paused: ${pausedCost.toLocaleString()}</span>
-            </div>
-          </div>
+            ))}
         </div>
       </div>
     </div>

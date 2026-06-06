@@ -6,6 +6,20 @@ export async function POST(request: Request) {
 
   try {
     if (action === 'create-schema') {
+      // Create users table (auth)
+      await query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          name VARCHAR(255) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'manager', 'viewer')),
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+      await query(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`)
+
       // Create agents table
       await query(`
         CREATE TABLE IF NOT EXISTS agents (

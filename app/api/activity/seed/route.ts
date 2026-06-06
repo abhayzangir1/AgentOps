@@ -52,14 +52,25 @@ const DEMO_ACTIVITIES = [
 
 export async function POST() {
   try {
+    console.log('[v0] Starting activity seed...')
     const results = []
-    for (const activity of DEMO_ACTIVITIES) {
-      const result = await recordActivity(activity)
-      results.push(result)
+    for (let i = 0; i < DEMO_ACTIVITIES.length; i++) {
+      const activity = DEMO_ACTIVITIES[i]
+      console.log(`[v0] Seeding activity ${i + 1}/${DEMO_ACTIVITIES.length}: ${activity.description.substring(0, 50)}...`)
+      try {
+        const result = await recordActivity(activity)
+        results.push(result)
+        console.log(`[v0] ✓ Activity ${i + 1} seeded with eventId: ${result.eventId}`)
+      } catch (itemError) {
+        console.error(`[v0] ✗ Activity ${i + 1} failed:`, itemError instanceof Error ? itemError.message : itemError)
+        throw itemError
+      }
     }
+    console.log(`[v0] ✓ Successfully seeded ${results.length} activities`)
     return NextResponse.json({ success: true, seeded: results.length })
   } catch (error) {
-    console.error('[v0] Seed activity error:', error)
-    return NextResponse.json({ error: 'Failed to seed activity data' }, { status: 500 })
+    console.error('[v0] Seed activity error:', error instanceof Error ? error.message : error)
+    console.error('[v0] Error details:', error instanceof Error ? error.stack : error)
+    return NextResponse.json({ error: 'Failed to seed activity data', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }
