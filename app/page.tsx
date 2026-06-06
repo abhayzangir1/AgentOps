@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import useSWR from 'swr'
 import {
   Menu,
@@ -27,6 +27,7 @@ import { AuditLog } from '@/components/audit-log'
 import { QuickStats } from '@/components/quick-stats'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PermissionHierarchy } from '@/components/permission-hierarchy'
+import { SettingsModal } from '@/components/settings-modal'
 
 type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions'
 
@@ -87,11 +88,31 @@ function PendingBadge({ count }: { count: number }) {
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isLoggingOut, startLogout] = useTransition()
 
   const { data: approvals } = useSWR('/api/approvals', fetcher, { refreshInterval: 10000 })
+  const { data: meData, mutate: mutateMe } = useSWR('/api/auth/me', fetcher)
+  const user = meData?.user ?? null
+
   const pendingCount = Array.isArray(approvals)
     ? approvals.filter((a: { status: string }) => a.status === 'pending').length
     : 0
+
+  function handleLogout() {
+    startLogout(async () => {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      window.location.href = '/login'
+    })
+  }
+
+  function handleUserUpdate(updated: { id: number; email: string; name: string; role: string }) {
+    mutateMe({ user: updated }, false)
+  }
+
+  const initials = user?.name
+    ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'OP'
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -142,13 +163,20 @@ export default function DashboardPage() {
 
         {/* Footer */}
         <div className="p-3 border-t border-border space-y-0.5">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/10 transition-colors">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/10 transition-colors"
+          >
             <Settings size={15} />
             Settings
           </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/10 transition-colors">
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/10 transition-colors disabled:opacity-50"
+          >
             <LogOut size={15} />
-            Logout
+            {isLoggingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
       </aside>
@@ -201,12 +229,15 @@ export default function DashboardPage() {
             {/* User */}
             <div className="flex items-center gap-2">
               <div className="hidden sm:block text-right">
-                <p className="text-sm font-medium leading-none">Operations</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">ops@company.ai</p>
+                <p className="text-sm font-medium leading-none">{user?.name ?? 'Loading…'}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{user?.email ?? ''}</p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-xs flex-shrink-0">
-                OP
-              </div>
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="w-8 h-8 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-xs flex-shrink-0 hover:opacity-80 transition"
+              >
+                {initials}
+              </button>
             </div>
           </div>
         </header>
@@ -349,6 +380,13 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        user={user}
+        onUserUpdate={handleUserUpdate}
+      />
     </div>
   )
 }
