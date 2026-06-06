@@ -7,8 +7,20 @@ export interface Agent {
   parent_agent_id: number | null
   monthly_cost_usd: number
   budget_limit_usd: number | null
+  capability_scopes: string[]
+  escalation_policy: {
+    timeout_hours: number
+    escalate_to: number | null
+    notify_on_escalation?: boolean
+  } | null
   created_at: string
   updated_at: string
+}
+
+export interface CostSnapshot {
+  date: string
+  totalCost: number
+  agentBreakdown: Record<string, number>
 }
 
 export interface ActivityEvent {
@@ -20,14 +32,14 @@ export interface ActivityEvent {
   duration?: number
   status: 'success' | 'pending' | 'failed'
   timestamp: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface Approval {
   id: number
   agent_id: number
-  request_type: 'deploy' | 'resource_upgrade' | 'config_change' | 'cost_increase'
-  request_details: Record<string, any>
+  request_type: 'deploy' | 'resource_upgrade' | 'config_change' | 'cost_increase' | 'budget_increase'
+  request_details: Record<string, unknown>
   requested_by_user_id: number
   status: 'pending' | 'approved' | 'rejected' | 'expired'
   assigned_to_user_id: number | null

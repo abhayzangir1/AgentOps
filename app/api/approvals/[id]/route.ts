@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { Approval } from '@/lib/types'
+import { getSession } from '@/lib/auth'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const session = await getSession()
+    const userId = session?.userId ?? 1
+
     const { id } = await params
     const body = await req.json()
     const { status, notes, assigned_to_user_id } = body
 
     const updateParts: string[] = []
-    const values: any[] = []
+    const values: unknown[] = []
     let paramIndex = 1
 
     if (status) {
@@ -54,8 +58,8 @@ export async function PATCH(
       await query(
         `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
          VALUES ($1, $2, $3, $4)`,
-        [approval.agent_id, `approval_${status}`, 1, JSON.stringify({ notes: notes || 'No notes' })],
-      )
+        [approval.agent_id, `approval_${status}`, userId, JSON.stringify({ notes: notes || 'No notes', approval_id: parseInt(id) })],
+      ).catch(() => {})
     }
 
     return NextResponse.json(result.rows[0] as Approval)

@@ -3,9 +3,21 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { ChevronDown, CircleDot, Pause, Play, Plus, Eye, AlertCircle, RefreshCw } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleDot,
+  Pause,
+  Play,
+  Plus,
+  Eye,
+  AlertCircle,
+  RefreshCw,
+  LayoutList,
+  Network,
+} from 'lucide-react'
 import { AgentFormDialog } from './agent-form-dialog'
 import { AgentDetailPanel } from './agent-detail-panel'
+import { OrgChart } from './org-chart'
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error('Failed to fetch')
@@ -22,6 +34,7 @@ export function AgentRegistry() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [view, setView] = useState<'list' | 'org'>('list')
 
   const toggleExpanded = (id: number) => {
     const newSet = new Set(expandedIds)
@@ -118,8 +131,29 @@ export function AgentRegistry() {
 
   return (
     <div className="space-y-4">
-      {/* Header with Create Button */}
-      <div className="flex justify-end">
+      {/* Header with Create Button and View Toggle */}
+      <div className="flex items-center justify-between">
+        {/* View switcher */}
+        <div className="flex items-center gap-1 p-0.5 bg-muted/30 rounded-lg border border-border">
+          <button
+            onClick={() => setView('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <LayoutList size={13} />
+            List
+          </button>
+          <button
+            onClick={() => setView('org')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              view === 'org' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Network size={13} />
+            Org Chart
+          </button>
+        </div>
         <button
           onClick={() => setShowCreateDialog(true)}
           className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
@@ -129,7 +163,8 @@ export function AgentRegistry() {
         </button>
       </div>
 
-      {/* Agent List */}
+      {/* Agent List or Org Chart */}
+      {view === 'list' ? (
       <div className="space-y-3">
       {topLevelAgents.map((agent) => {
         const children = childAgents(agent.id)
@@ -214,6 +249,9 @@ export function AgentRegistry() {
         )
       })}
       </div>
+      ) : (
+        <OrgChart onAgentClick={(agent) => setSelectedAgent(agent)} />
+      )}
 
       {/* Create/Edit Dialog */}
       <AgentFormDialog
