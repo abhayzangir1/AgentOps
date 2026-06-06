@@ -2,9 +2,12 @@
 
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
-import { Search, Filter, Download, ChevronDown } from 'lucide-react'
+import { Search, Filter, Download, ChevronDown, AlertCircle, RefreshCw, FileText } from 'lucide-react'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch')
+  return r.json()
+})
 
 interface AuditLog {
   id: number
@@ -15,13 +18,6 @@ interface AuditLog {
   created_at: string
 }
 
-const DEMO_LOGS: AuditLog[] = [
-  { id: 1, agent_id: 1, action: 'agent_status_changed', actor_user_id: 1, details: { status: 'paused' }, created_at: '2026-06-05T01:50:00Z' },
-  { id: 2, agent_id: 2, action: 'approval_approved', actor_user_id: 1, details: { notes: 'Approved' }, created_at: '2026-06-05T02:13:00Z' },
-  { id: 3, agent_id: 3, action: 'agent_created', actor_user_id: 1, details: { name: 'New Agent' }, created_at: '2026-06-05T03:00:00Z' },
-  { id: 4, agent_id: 1, action: 'approval_rejected', actor_user_id: 1, details: { reason: 'Budget exceeded' }, created_at: '2026-06-05T04:00:00Z' },
-]
-
 const ACTION_TYPES = [
   { value: '', label: 'All Actions' },
   { value: 'agent_created', label: 'Agent Created' },
@@ -31,11 +27,9 @@ const ACTION_TYPES = [
 ]
 
 export function AuditLog() {
-  const { data: rawLogs, isLoading } = useSWR<AuditLog[]>('/api/audit-logs?limit=200', fetcher, {
+  const { data: logs, isLoading, error, mutate } = useSWR<AuditLog[]>('/api/audit-logs?limit=200', fetcher, {
     refreshInterval: 10000,
   })
-
-  const logs = Array.isArray(rawLogs) ? rawLogs : DEMO_LOGS
 
   const [searchQuery, setSearchQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('')
@@ -43,6 +37,7 @@ export function AuditLog() {
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredLogs = useMemo(() => {
+    if (!logs) return []
     return logs.filter((log) => {
       // Search filter
       if (searchQuery) {
@@ -130,6 +125,33 @@ export function AuditLog() {
         {[...Array(5)].map((_, i) => (
           <div key={i} className="h-12 bg-muted rounded" />
         ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <AlertCircle size={48} className="text-destructive mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Failed to Load Audit Logs</h3>
+        <p className="text-sm text-muted-foreground mb-4">Could not connect to Aurora PostgreSQL</p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm"
+        >
+          <RefreshCw size={16} />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <FileText size={48} className="text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No Audit Logs Yet</h3>
+        <p className="text-sm text-muted-foreground">System events will be recorded here</p>
       </div>
     )
   }

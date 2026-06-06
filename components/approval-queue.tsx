@@ -3,77 +3,19 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Approval, Agent } from '@/lib/types'
-import { CheckCircle, XCircle, Clock } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, Inbox } from 'lucide-react'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-// Demo approvals for hackathon
-const DEMO_APPROVALS: Approval[] = [
-  {
-    id: 1,
-    agent_id: 1,
-    request_type: 'resource_upgrade',
-    request_details: {
-      current_tier: 'pro',
-      requested_tier: 'enterprise',
-      reason: 'increased load during peak hours',
-      expectedCostIncrease: 3500,
-    },
-    requested_by_user_id: 2,
-    status: 'pending',
-    assigned_to_user_id: 1,
-    created_at: '2025-06-04T17:30:00Z',
-    updated_at: '2025-06-04T17:30:00Z',
-    resolved_at: null,
-    notes: null,
-  },
-  {
-    id: 2,
-    agent_id: 2,
-    request_type: 'config_change',
-    request_details: {
-      parameter: 'batch_size',
-      old_value: 100,
-      new_value: 500,
-      justification: 'improve throughput',
-    },
-    requested_by_user_id: 2,
-    status: 'pending',
-    assigned_to_user_id: 1,
-    created_at: '2025-06-04T17:45:00Z',
-    updated_at: '2025-06-04T17:45:00Z',
-    resolved_at: null,
-    notes: null,
-  },
-  {
-    id: 3,
-    agent_id: 3,
-    request_type: 'cost_increase',
-    request_details: {
-      monthly_budget: 1500,
-      requested_budget: 2000,
-      reason: 'expanded content library access',
-    },
-    requested_by_user_id: 2,
-    status: 'pending',
-    assigned_to_user_id: 1,
-    created_at: '2025-06-04T18:00:00Z',
-    updated_at: '2025-06-04T18:00:00Z',
-    resolved_at: null,
-    notes: null,
-  },
-]
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch')
+  return r.json()
+})
 
 export function ApprovalQueue() {
-  const { data: rawApprovals, isLoading, mutate } = useSWR<Approval[]>('/api/approvals', fetcher, {
+  const { data: approvals, isLoading, error, mutate } = useSWR<Approval[]>('/api/approvals', fetcher, {
     refreshInterval: 5000,
   })
-  const { data: rawAgents } = useSWR<Agent[]>('/api/agents', fetcher)
+  const { data: agents } = useSWR<Agent[]>('/api/agents', fetcher)
   const [processingId, setProcessingId] = useState<number | null>(null)
-
-  // Use demo data if API returns error or non-array response
-  const approvals = Array.isArray(rawApprovals) ? rawApprovals : DEMO_APPROVALS
-  const agents = Array.isArray(rawAgents) ? rawAgents : []
 
   const getAgent = (agentId: number) => agents?.find((a) => a.id === agentId)
 
@@ -117,11 +59,29 @@ export function ApprovalQueue() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <AlertCircle size={32} className="text-destructive mb-3" />
+        <p className="text-sm font-medium mb-1">Failed to Load Approvals</p>
+        <p className="text-xs text-muted-foreground mb-3">Could not connect to Aurora PostgreSQL</p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-2 px-3 py-1.5 bg-accent text-accent-foreground rounded text-xs"
+        >
+          <RefreshCw size={14} />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
   if (pendingApprovals.length === 0) {
     return (
       <div className="p-8 text-center border border-dashed border-border rounded-lg">
-        <CheckCircle size={32} className="mx-auto text-green-500/50 mb-3" />
-        <p className="text-sm text-muted-foreground">All approvals processed</p>
+        <Inbox size={32} className="mx-auto text-muted-foreground mb-3" />
+        <p className="text-sm font-medium mb-1">No Pending Approvals</p>
+        <p className="text-xs text-muted-foreground">All requests have been processed</p>
       </div>
     )
   }

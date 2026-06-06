@@ -21,16 +21,16 @@ export async function POST(request: Request) {
         )
       `)
 
-      // Create permissions table
+      // Create permissions table for user-agent access control
       await query(`
         CREATE TABLE IF NOT EXISTS permissions (
           id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
           agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-          permission_type VARCHAR(100) NOT NULL,
-          resource VARCHAR(255) NOT NULL,
+          permission_level VARCHAR(50) NOT NULL CHECK (permission_level IN ('view', 'edit', 'admin', 'approve')),
           granted_by_user_id INTEGER,
           created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(agent_id, permission_type, resource)
+          UNIQUE(user_id, agent_id)
         )
       `)
 

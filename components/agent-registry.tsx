@@ -3,145 +3,19 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { ChevronDown, CircleDot, Pause, Play, Plus, Eye } from 'lucide-react'
+import { ChevronDown, CircleDot, Pause, Play, Plus, Eye, AlertCircle, RefreshCw } from 'lucide-react'
 import { AgentFormDialog } from './agent-form-dialog'
 import { AgentDetailPanel } from './agent-detail-panel'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-// Demo data for hackathon
-const DEMO_AGENTS: Agent[] = [
-  {
-    id: 1,
-    name: 'Acme Corp AI Squad',
-    description: 'Enterprise AI agent management',
-    status: 'active',
-    tier: 'enterprise',
-    parent_agent_id: null,
-    monthly_cost_usd: 5000,
-    created_at: '2025-06-01T10:00:00Z',
-    updated_at: '2025-06-04T19:20:00Z',
-  },
-  {
-    id: 2,
-    name: 'DataFlow Pipeline',
-    description: 'Real-time data processing',
-    status: 'active',
-    tier: 'pro',
-    parent_agent_id: null,
-    monthly_cost_usd: 2500,
-    created_at: '2025-06-01T11:00:00Z',
-    updated_at: '2025-06-04T19:15:00Z',
-  },
-  {
-    id: 3,
-    name: 'ContentGen Pro',
-    description: 'Automated content generation',
-    status: 'active',
-    tier: 'pro',
-    parent_agent_id: null,
-    monthly_cost_usd: 1500,
-    created_at: '2025-06-02T09:00:00Z',
-    updated_at: '2025-06-04T19:10:00Z',
-  },
-  {
-    id: 4,
-    name: 'Support Bot',
-    description: 'Customer support automation',
-    status: 'paused',
-    tier: 'basic',
-    parent_agent_id: null,
-    monthly_cost_usd: 500,
-    created_at: '2025-06-02T14:00:00Z',
-    updated_at: '2025-06-04T18:30:00Z',
-  },
-  // Child agents
-  {
-    id: 5,
-    name: 'DataFlow - Ingestion',
-    description: 'Data collection and normalization',
-    status: 'active',
-    tier: 'pro',
-    parent_agent_id: 2,
-    monthly_cost_usd: 1000,
-    created_at: '2025-06-01T12:00:00Z',
-    updated_at: '2025-06-04T19:15:00Z',
-  },
-  {
-    id: 6,
-    name: 'DataFlow - Processing',
-    description: 'ETL transformations',
-    status: 'active',
-    tier: 'pro',
-    parent_agent_id: 2,
-    monthly_cost_usd: 1000,
-    created_at: '2025-06-01T12:30:00Z',
-    updated_at: '2025-06-04T19:15:00Z',
-  },
-  {
-    id: 7,
-    name: 'DataFlow - Analytics',
-    description: 'Real-time analytics engine',
-    status: 'active',
-    tier: 'pro',
-    parent_agent_id: 2,
-    monthly_cost_usd: 500,
-    created_at: '2025-06-01T13:00:00Z',
-    updated_at: '2025-06-04T19:15:00Z',
-  },
-  {
-    id: 8,
-    name: 'ContentGen - Blog Posts',
-    description: 'Blog content automation',
-    status: 'active',
-    tier: 'basic',
-    parent_agent_id: 3,
-    monthly_cost_usd: 500,
-    created_at: '2025-06-02T10:00:00Z',
-    updated_at: '2025-06-04T19:10:00Z',
-  },
-  {
-    id: 9,
-    name: 'ContentGen - Social',
-    description: 'Social media content generation',
-    status: 'active',
-    tier: 'basic',
-    parent_agent_id: 3,
-    monthly_cost_usd: 500,
-    created_at: '2025-06-02T10:30:00Z',
-    updated_at: '2025-06-04T19:10:00Z',
-  },
-  {
-    id: 10,
-    name: 'Support - Tier 1',
-    description: 'Initial customer inquiries',
-    status: 'active',
-    tier: 'basic',
-    parent_agent_id: 4,
-    monthly_cost_usd: 250,
-    created_at: '2025-06-02T15:00:00Z',
-    updated_at: '2025-06-04T18:30:00Z',
-  },
-  {
-    id: 11,
-    name: 'Support - Tier 2',
-    description: 'Escalated support issues',
-    status: 'paused',
-    tier: 'basic',
-    parent_agent_id: 4,
-    monthly_cost_usd: 250,
-    created_at: '2025-06-02T15:30:00Z',
-    updated_at: '2025-06-04T18:30:00Z',
-  },
-]
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch')
+  return r.json()
+})
 
 export function AgentRegistry() {
-  const { data: rawAgents, isLoading, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
+  const { data: agents, isLoading, error, mutate } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 5000,
   })
-
-  // Use demo data if API returns error or non-array response
-  const agents = Array.isArray(rawAgents) ? rawAgents : DEMO_AGENTS
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [togglingId, setTogglingId] = useState<number | null>(null)
@@ -187,8 +61,55 @@ export function AgentRegistry() {
     )
   }
 
-  const topLevelAgents = agents?.filter((a) => !a.parent_agent_id) || []
-  const childAgents = (parentId: number) => agents?.filter((a) => a.parent_agent_id === parentId) || []
+  if (error || !agents) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <AlertCircle size={48} className="text-destructive mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Failed to Load Agents</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Could not connect to Aurora PostgreSQL database
+        </p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm"
+        >
+          <RefreshCw size={16} />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (agents.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Plus size={32} className="text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">No Agents Yet</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Create your first AI agent to get started
+        </p>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm"
+        >
+          <Plus size={16} />
+          Add Agent
+        </button>
+        <AgentFormDialog
+          isOpen={showCreateDialog}
+          onClose={() => setShowCreateDialog(false)}
+          onSuccess={() => mutate()}
+          parentAgents={[]}
+          editAgent={null}
+        />
+      </div>
+    )
+  }
+
+  const topLevelAgents = agents.filter((a) => !a.parent_agent_id)
+  const childAgents = (parentId: number) => agents.filter((a) => a.parent_agent_id === parentId)
 
   const handleAgentClick = (agent: Agent, e: React.MouseEvent) => {
     e.stopPropagation()
