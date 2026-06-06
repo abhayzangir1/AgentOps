@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
+  CreditCard,
 } from 'lucide-react'
 import { AgentRegistry } from '@/components/agent-registry'
 import { ActivityMonitor } from '@/components/activity-monitor'
@@ -28,8 +29,9 @@ import { QuickStats } from '@/components/quick-stats'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PermissionHierarchy } from '@/components/permission-hierarchy'
 import { SettingsModal } from '@/components/settings-modal'
+import { PricingPage } from '@/components/pricing-page'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -45,6 +47,7 @@ const NAV_TABS: {
   { id: 'costs',        label: 'Cost Intelligence', icon: DollarSign,      description: 'Budget enforcement' },
   { id: 'permissions',  label: 'Permissions',       icon: GitBranch,       description: 'Hierarchy & access' },
   { id: 'audit',        label: 'Audit Log',         icon: BookOpen,        description: 'Compliance records' },
+  { id: 'plans',        label: 'Plans & Billing',   icon: CreditCard,      description: 'SaaS pricing tiers' },
 ]
 
 function SystemStatusBar() {
@@ -376,6 +379,18 @@ export default function DashboardPage() {
               <div className="bg-card border border-border rounded-xl p-5">
                 <PermissionHierarchy />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'plans' && (
+            <div className="max-w-5xl space-y-5">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Plans &amp; Billing</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Per-active-agent pricing — scale from experimenting to enterprise-grade deployment
+                </p>
+              </div>
+              <PricingPage />
             </div>
           )}
         </div>

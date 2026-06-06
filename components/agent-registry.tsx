@@ -14,6 +14,8 @@ import {
   RefreshCw,
   LayoutList,
   Network,
+  Shield,
+  Timer,
 } from 'lucide-react'
 import { AgentFormDialog } from './agent-form-dialog'
 import { AgentDetailPanel } from './agent-detail-panel'
@@ -186,7 +188,33 @@ export function AgentRegistry() {
                 />
                 <div className="flex-1">
                   <h4 className="font-medium text-sm">{agent.name}</h4>
-                  <p className="text-xs text-muted-foreground">{agent.tier} • ${agent.monthly_cost_usd}/mo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {agent.tier} · ${agent.monthly_cost_usd}/mo
+                    {agent.budget_limit_usd ? ` · cap $${agent.budget_limit_usd}` : ''}
+                  </p>
+                  {/* Capability scopes */}
+                  {Array.isArray(agent.capability_scopes) && agent.capability_scopes.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <Shield size={10} className="text-muted-foreground/60" />
+                      {agent.capability_scopes.slice(0, 4).map((s) => (
+                        <span key={s} className="text-[10px] bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded">
+                          {s}
+                        </span>
+                      ))}
+                      {agent.capability_scopes.length > 4 && (
+                        <span className="text-[10px] text-muted-foreground/60">+{agent.capability_scopes.length - 4}</span>
+                      )}
+                    </div>
+                  )}
+                  {/* Escalation policy */}
+                  {agent.escalation_policy && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Timer size={10} className="text-muted-foreground/60" />
+                      <span className="text-[10px] text-muted-foreground/60">
+                        Escalate after {agent.escalation_policy.timeout_hours}h
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {children.length > 0 && (
                   <ChevronDown
