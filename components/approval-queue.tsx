@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ChevronUp,
   Lock,
+  Sparkles,
+  Pencil,
+  Brain,
 } from 'lucide-react'
 
 const fetcher = (url: string) =>
@@ -86,6 +89,15 @@ const RISK_BADGE: Record<string, string> = {
   low: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
 }
 
+interface RiskAnalysis {
+  risk: 'critical' | 'high' | 'medium' | 'low'
+  score: number
+  summary: string
+  concerns: string[]
+  recommendation: 'approve' | 'reject' | 'review'
+  reasoning: string
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString('en-US', {
     month: 'short',
@@ -100,13 +112,24 @@ interface ApprovalCardProps {
   agent: Agent | undefined
   onApprove: (id: number, notes: string) => Promise<void>
   onReject: (id: number, notes: string) => Promise<void>
+  onModify: (id: number, requestDetails: Record<string, unknown>, notes: string) => Promise<void>
 }
 
-function ApprovalCard({ approval, agent, onApprove, onReject }: ApprovalCardProps) {
+function ApprovalCard({ approval, agent, onApprove, onReject, onModify }: ApprovalCardProps) {
   const [processing, setProcessing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [notes, setNotes] = useState('')
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null)
+
+  // AI Sentinel risk analysis
+  const [analysis, setAnalysis] = useState<RiskAnalysis | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+
+  // Modify mode
+  const [modifying, setModifying] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [modifyError, setModifyError] = useState<string | null>(null)
 
   const config = RISK_CONFIG[approval.request_type] ?? {
     label: approval.request_type.replace(/_/g, ' '),
@@ -117,6 +140,49 @@ function ApprovalCard({ approval, agent, onApprove, onReject }: ApprovalCardProp
     description: 'Review this request carefully before approving.',
   }
   const Icon = config.icon
+
+  const runAnalysis = async () => {
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    try {
+      const res = await fetch(`/api/approvals/${approval.id}/analyze`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setAnalyzeError(data.error || 'Analysis failed')
+        return
+      }
+      setAnalysis(data.analysis)
+      setExpanded(true)
+    } catch {
+      setAnalyzeError('Network error contacting Sentinel')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const startModify = () => {
+    setDraft(JSON.stringify(approval.request_details ?? {}, null, 2))
+    setModifyError(null)
+    setModifying(true)
+    setExpanded(true)
+  }
+
+  const saveModify = async () => {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(draft)
+    } catch {
+      setModifyError('Invalid JSON — please fix before saving')
+      return
+    }
+    setProcessing(true)
+    try {
+      await onModify(approval.id, parsed, notes || 'Payload modified by reviewer')
+      setModifying(false)
+    } finally {
+      setProcessing(false)
+    }
+  }
 
   const handleConfirm = async () => {
     if (!actionType) return
@@ -177,8 +243,56 @@ function ApprovalCard({ approval, agent, onApprove, onReject }: ApprovalCardProp
           </button>
         </div>
 
-        {/* Request details — collapsed by default */}
-        {expanded && (
+        {/* AI Sentinel analysis */}
+        {analyzeError && (
+          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+            <AlertCircle size={13} />
+            {analyzeError}
+          </div>
+        )}
+
+        {analysis && (
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Brain size={14} className="text-accent" />
+              <span className="text-xs font-semibold text-accent">Sentinel AI Assessment</span>
+              <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${RISK_BADGE[analysis.risk]}`}>
+                {analysis.risk} · {analysis.score}/100
+              </span>
+            </div>
+            <p className="text-xs text-foreground leading-relaxed font-medium">{analysis.summary}</p>
+            {analysis.concerns.length > 0 && (
+              <ul className="space-y-1">
+                {analysis.concerns.map((c, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <span className="text-accent mt-0.5">·</span>
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/40 pt-2">
+              {analysis.reasoning}
+            </p>
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-muted-foreground">Recommendation:</span>
+              <span
+                className={`font-bold uppercase tracking-wide ${
+                  analysis.recommendation === 'approve'
+                    ? 'text-emerald-400'
+                    : analysis.recommendation === 'reject'
+                    ? 'text-red-400'
+                    : 'text-yellow-400'
+                }`}
+              >
+                {analysis.recommendation}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Request details / modify editor */}
+        {expanded && !modifying && (
           <div className="p-3 bg-black/30 rounded-lg border border-border/50">
             <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide mb-2">
               Request Payload
@@ -186,6 +300,38 @@ function ApprovalCard({ approval, agent, onApprove, onReject }: ApprovalCardProp
             <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all leading-relaxed">
               {JSON.stringify(approval.request_details, null, 2)}
             </pre>
+          </div>
+        )}
+
+        {modifying && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">
+              Edit Request Payload (JSON)
+            </p>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={8}
+              spellCheck={false}
+              className="w-full px-3 py-2 text-xs font-mono bg-black/40 border border-border rounded-lg resize-y focus:outline-none focus:ring-1 focus:ring-accent text-foreground/90"
+            />
+            {modifyError && <p className="text-xs text-destructive">{modifyError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={saveModify}
+                disabled={processing}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50 transition flex items-center justify-center gap-1.5"
+              >
+                {processing ? <RefreshCw size={14} className="animate-spin" /> : <Pencil size={14} />}
+                Save modified payload
+              </button>
+              <button
+                onClick={() => setModifying(false)}
+                className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
@@ -234,28 +380,45 @@ function ApprovalCard({ approval, agent, onApprove, onReject }: ApprovalCardProp
             </div>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActionType('approve')}
-              className="flex-1 py-2 rounded-lg text-sm font-semibold bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <CheckCircle2 size={14} />
-              Approve
-            </button>
-            <button
-              onClick={() => setActionType('reject')}
-              className="flex-1 py-2 rounded-lg text-sm font-semibold bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <XCircle size={14} />
-              Reject
-            </button>
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="px-3 py-2 rounded-lg text-sm border border-border hover:bg-muted transition-colors text-muted-foreground"
-            >
-              {expanded ? 'Hide' : 'Details'}
-            </button>
-          </div>
+          !modifying && (
+            <div className="space-y-2">
+              {/* Sentinel + Modify row */}
+              <div className="flex gap-2">
+                <button
+                  onClick={runAnalysis}
+                  disabled={analyzing}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold bg-accent/10 hover:bg-accent/20 text-accent border border-accent/25 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {analyzing ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {analyzing ? 'Analyzing…' : analysis ? 'Re-run Sentinel AI' : 'Analyze with Sentinel AI'}
+                </button>
+                <button
+                  onClick={startModify}
+                  className="px-3 py-2 rounded-lg text-sm border border-border hover:bg-muted transition-colors text-muted-foreground flex items-center gap-1.5"
+                >
+                  <Pencil size={13} />
+                  Modify
+                </button>
+              </div>
+              {/* Approve / Reject row */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActionType('approve')}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 size={14} />
+                  Approve
+                </button>
+                <button
+                  onClick={() => setActionType('reject')}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <XCircle size={14} />
+                  Reject
+                </button>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>
@@ -289,6 +452,15 @@ export function ApprovalQueue() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'rejected', notes }),
+    })
+    mutate()
+  }
+
+  const handleModify = async (id: number, requestDetails: Record<string, unknown>, notes: string) => {
+    await fetch(`/api/approvals/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_details: requestDetails, notes }),
     })
     mutate()
   }
@@ -380,6 +552,7 @@ export function ApprovalQueue() {
                   agent={getAgent(approval.agent_id)}
                   onApprove={handleApprove}
                   onReject={handleReject}
+                  onModify={handleModify}
                 />
               ))}
             </div>

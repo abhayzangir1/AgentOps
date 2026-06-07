@@ -13,7 +13,7 @@ export async function PATCH(
 
     const { id } = await params
     const body = await req.json()
-    const { status, notes, assigned_to_user_id } = body
+    const { status, notes, assigned_to_user_id, request_details } = body
 
     const updateParts: string[] = []
     const values: unknown[] = []
@@ -38,6 +38,16 @@ export async function PATCH(
       values.push(assigned_to_user_id)
     }
 
+    // "Modify" action — supervisor edits the agent's requested payload before deciding.
+    if (request_details !== undefined) {
+      updateParts.push(`request_details = $${paramIndex++}`)
+      values.push(JSON.stringify(request_details))
+    }
+
+    if (updateParts.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+    }
+
     values.push(parseInt(id))
 
     const result = await query(
@@ -53,12 +63,18 @@ export async function PATCH(
     }
 
     // Record audit log
+    const approval = result.rows[0]
     if (status) {
-      const approval = result.rows[0]
       await query(
         `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
          VALUES ($1, $2, $3, $4)`,
         [approval.agent_id, `approval_${status}`, userId, JSON.stringify({ notes: notes || 'No notes', approval_id: parseInt(id) })],
+      ).catch(() => {})
+    } else if (request_details !== undefined) {
+      await query(
+        `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
+         VALUES ($1, $2, $3, $4)`,
+        [approval.agent_id, 'approval_modified', userId, JSON.stringify({ approval_id: parseInt(id), notes: notes || 'Payload modified by reviewer' })],
       ).catch(() => {})
     }
 

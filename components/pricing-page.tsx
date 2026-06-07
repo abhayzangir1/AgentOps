@@ -1,6 +1,13 @@
 'use client'
 
-import { Check, Zap, Building2, Rocket, ArrowRight, Shield, BookOpen, DollarSign, Bot, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Zap, Building2, Rocket, ArrowRight, Shield, BookOpen, DollarSign, Bot, ShieldCheck, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void }
+  }
+}
 
 interface PlanFeature {
   text: string
@@ -174,6 +181,69 @@ function FeatureCell({ value }: { value: boolean | string }) {
 }
 
 export function PricingPage() {
+  const [seats, setSeats] = useState(3)
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
+  const [billing, setBilling] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  async function handleGrowthCheckout() {
+    setBilling(null)
+    setLoadingPlan('growth')
+    try {
+      const res = await fetch('/api/billing/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: seats }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.subscriptionId) {
+        setBilling({ type: 'error', message: data.error || 'Could not start checkout. Verify Razorpay keys.' })
+        return
+      }
+      if (typeof window === 'undefined' || !window.Razorpay) {
+        setBilling({ type: 'error', message: 'Checkout failed to load. Please refresh and try again.' })
+        return
+      }
+
+      const rzp = new window.Razorpay({
+        key: data.keyId,
+        subscription_id: data.subscriptionId,
+        name: 'AgentOps',
+        description: `Growth plan — ${seats} agent seat${seats > 1 ? 's' : ''}`,
+        theme: { color: '#10b981' },
+        handler: async (response: Record<string, string>) => {
+          const verify = await fetch('/api/billing/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response),
+          })
+          const vData = await verify.json()
+          if (verify.ok && vData.verified) {
+            setBilling({ type: 'success', message: 'Subscription active — Growth tier unlocked. Welcome aboard!' })
+          } else {
+            setBilling({ type: 'error', message: 'Payment captured but verification failed. Contact support.' })
+          }
+        },
+        modal: {
+          ondismiss: () => setBilling({ type: 'error', message: 'Checkout cancelled.' }),
+        },
+      })
+      rzp.open()
+    } catch {
+      setBilling({ type: 'error', message: 'Network error starting checkout.' })
+    } finally {
+      setLoadingPlan(null)
+    }
+  }
+
+  function handleCta(planId: string) {
+    if (planId === 'growth') return handleGrowthCheckout()
+    if (planId === 'enterprise') {
+      setBilling({ type: 'success', message: 'Thanks! Our sales team will reach out about Enterprise pricing.' })
+      return
+    }
+    setBilling({ type: 'success', message: 'Starter plan is free — you are already on it.' })
+  }
+
   return (
     <div className="space-y-10 max-w-5xl">
       {/* Header */}
@@ -182,6 +252,38 @@ export function PricingPage() {
         <p className="text-sm text-muted-foreground mt-0.5">
           Agent-seat pricing — pay per active agent, not per human user. Scale your AI workforce without surprises.
         </p>
+      </div>
+
+      {/* Billing status */}
+      {billing && (
+        <div
+          className={`flex items-center gap-2 text-sm px-4 py-3 rounded-xl border ${
+            billing.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              : 'bg-destructive/10 border-destructive/20 text-destructive'
+          }`}
+        >
+          {billing.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          {billing.message}
+        </div>
+      )}
+
+      {/* Growth seat selector */}
+      <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-accent/25 bg-accent/5">
+        <Rocket size={16} className="text-accent" />
+        <span className="text-sm font-medium">Growth plan — estimate your monthly cost</span>
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-xs text-muted-foreground">Agent seats</label>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={seats}
+            onChange={(e) => setSeats(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+            className="w-20 h-9 px-2 rounded-lg bg-input border border-border text-sm text-foreground text-center focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <span className="text-sm font-bold text-accent">= ${seats * 49}/mo</span>
+        </div>
       </div>
 
       {/* Compliance badges */}
@@ -232,7 +334,9 @@ export function PricingPage() {
 
               {/* CTA */}
               <button
-                className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all mb-5 ${
+                onClick={() => handleCta(plan.id)}
+                disabled={loadingPlan === plan.id}
+                className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all mb-5 disabled:opacity-60 ${
                   plan.highlight
                     ? 'bg-accent text-accent-foreground hover:bg-accent/90'
                     : plan.id === 'enterprise'
@@ -240,8 +344,17 @@ export function PricingPage() {
                     : 'bg-muted/40 border border-border text-foreground hover:bg-muted/70'
                 }`}
               >
-                {plan.cta}
-                <ArrowRight size={14} />
+                {loadingPlan === plan.id ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Starting checkout…
+                  </>
+                ) : (
+                  <>
+                    {plan.cta}
+                    <ArrowRight size={14} />
+                  </>
+                )}
               </button>
 
               {/* Features */}
