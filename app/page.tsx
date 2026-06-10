@@ -30,6 +30,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { PermissionHierarchy } from '@/components/permission-hierarchy'
 import { SettingsModal } from '@/components/settings-modal'
 import { PricingPage } from '@/components/pricing-page'
+import { OpsCopilot } from '@/components/ops-copilot'
 
 type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans'
 
@@ -402,6 +403,8 @@ export default function DashboardPage() {
         user={user}
         onUserUpdate={handleUserUpdate}
       />
+
+      <OpsCopilot />
     </div>
   )
 }
