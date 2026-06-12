@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
+  CreditCard,
 } from 'lucide-react'
 import { AgentRegistry } from '@/components/agent-registry'
 import { ActivityMonitor } from '@/components/activity-monitor'
@@ -28,8 +29,10 @@ import { QuickStats } from '@/components/quick-stats'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PermissionHierarchy } from '@/components/permission-hierarchy'
 import { SettingsModal } from '@/components/settings-modal'
+import { PricingPage } from '@/components/pricing-page'
+import { OpsCopilot } from '@/components/ops-copilot'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -45,27 +48,34 @@ const NAV_TABS: {
   { id: 'costs',        label: 'Cost Intelligence', icon: DollarSign,      description: 'Budget enforcement' },
   { id: 'permissions',  label: 'Permissions',       icon: GitBranch,       description: 'Hierarchy & access' },
   { id: 'audit',        label: 'Audit Log',         icon: BookOpen,        description: 'Compliance records' },
+  { id: 'plans',        label: 'Plans & Billing',   icon: CreditCard,      description: 'SaaS pricing tiers' },
 ]
 
 function SystemStatusBar() {
-  const { data: health } = useSWR('/api/health', fetcher, { refreshInterval: 15000 })
+  const { data: health, isLoading } = useSWR('/api/health', fetcher, { refreshInterval: 15000 })
 
-  const dbOk = health?.checks?.database?.status === 'healthy'
-  const dynOk = health?.checks?.dynamodb?.status === 'healthy'
+  // Tri-state: while the first check is in flight we show "checking…" (amber)
+  // instead of a misleading "down" (red).
+  const dbState = !health && isLoading ? 'checking' : health?.checks?.database?.status === 'healthy' ? 'healthy' : 'down'
+  const dynState = !health && isLoading ? 'checking' : health?.checks?.dynamodb?.status === 'healthy' ? 'healthy' : 'down'
+
+  const dotClass = (s: string) =>
+    s === 'healthy' ? 'bg-emerald-500' : s === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'
+  const label = (s: string) => (s === 'checking' ? 'checking…' : s)
 
   return (
     <div className="flex items-center gap-4 px-4 py-1.5 bg-muted/20 border-b border-border text-xs text-muted-foreground">
       <div className="flex items-center gap-1.5">
-        <span className={`w-1.5 h-1.5 rounded-full ${dbOk ? 'bg-emerald-500' : 'bg-red-500'}`} />
-        <span>Aurora PostgreSQL {dbOk ? 'healthy' : 'down'}</span>
-        {health?.checks?.database?.latency && (
+        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(dbState)}`} />
+        <span>Aurora PostgreSQL {label(dbState)}</span>
+        {health?.checks?.database?.latency != null && (
           <span className="text-muted-foreground/50">{health.checks.database.latency}ms</span>
         )}
       </div>
       <span className="text-muted-foreground/30">·</span>
       <div className="flex items-center gap-1.5">
-        <span className={`w-1.5 h-1.5 rounded-full ${dynOk ? 'bg-emerald-500' : 'bg-red-500'}`} />
-        <span>DynamoDB {dynOk ? 'healthy' : 'down'}</span>
+        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(dynState)}`} />
+        <span>DynamoDB {label(dynState)}</span>
       </div>
       <span className="text-muted-foreground/30">·</span>
       <div className="flex items-center gap-1.5">
@@ -378,6 +388,18 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {activeTab === 'plans' && (
+            <div className="max-w-5xl space-y-5">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Plans &amp; Billing</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Per-active-agent pricing — scale from experimenting to enterprise-grade deployment
+                </p>
+              </div>
+              <PricingPage />
+            </div>
+          )}
         </div>
       </main>
 
@@ -387,6 +409,8 @@ export default function DashboardPage() {
         user={user}
         onUserUpdate={handleUserUpdate}
       />
+
+      <OpsCopilot />
     </div>
   )
 }

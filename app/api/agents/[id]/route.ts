@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
+import { getSession } from '@/lib/auth'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await getSession()
+    const userId = session?.userId ?? 1
+
     const { id } = await params
     const agentId = parseInt(id, 10)
     const body = await req.json()
-    const { status, name, description, tier, monthly_cost_usd, budget_limit_usd, parent_agent_id } = body
+    const { status, name, description, tier, monthly_cost_usd, budget_limit_usd, parent_agent_id, capability_scopes, escalation_policy } = body
 
     const updates: string[] = []
-    const values: any[] = []
+    const values: unknown[] = []
     let paramIndex = 1
 
     if (status !== undefined) {
@@ -40,6 +44,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.push(`parent_agent_id = $${paramIndex++}`)
       values.push(parent_agent_id)
     }
+    if (capability_scopes !== undefined) {
+      updates.push(`capability_scopes = $${paramIndex++}`)
+      values.push(capability_scopes)
+    }
+    if (escalation_policy !== undefined) {
+      updates.push(`escalation_policy = $${paramIndex++}`)
+      values.push(JSON.stringify(escalation_policy))
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -50,7 +62,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const result = await query(
       `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIndex}
-       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, created_at, updated_at`,
+       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd,
+         COALESCE(capability_scopes, '{}') as capability_scopes, escalation_policy, created_at, updated_at`,
       values,
     )
 
@@ -58,13 +71,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    // Record audit log for status changes
+    // Audit log for status changes
     if (status !== undefined) {
       await query(
         `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
-         VALUES ($1, $2, $3, $4)`,
-        [agentId, 'agent_status_changed', 1, JSON.stringify({ status })],
-      )
+         VALUES ($1, 'agent_status_changed', $2, $3)`,
+        [agentId, userId, JSON.stringify({ status })],
+      ).catch(() => {})
+    }
+
+    // Audit log for budget changes
+    if (budget_limit_usd !== undefined) {
+      await query(
+        `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
+         VALUES ($1, 'budget_updated', $2, $3)`,
+        [agentId, userId, JSON.stringify({ budget_limit_usd })],
+      ).catch(() => {})
     }
 
     return NextResponse.json(result.rows[0])
@@ -76,14 +98,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await getSession()
+    const userId = session?.userId ?? 1
+
     const { id } = await params
     const agentId = parseInt(id, 10)
+
+    // Get agent name for audit log before deletion
+    const agentResult = await query('SELECT name FROM agents WHERE id = $1', [agentId])
+    if (agentResult.rows.length === 0) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+    const agentName = agentResult.rows[0].name
 
     const result = await query('DELETE FROM agents WHERE id = $1 RETURNING id', [agentId])
 
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
+
+    // Audit log
+    await query(
+      `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
+       VALUES (NULL, 'agent_deleted', $1, $2)`,
+      [userId, JSON.stringify({ agent_id: agentId, name: agentName })],
+    ).catch(() => {})
 
     return NextResponse.json({ success: true })
   } catch (error) {

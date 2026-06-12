@@ -94,12 +94,18 @@ export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected'] as const
 export function validateAgentInput(body: Record<string, unknown>) {
   return {
     name: validateString(body.name, 'name', { minLength: 2, maxLength: 100 }),
-    description: validateString(body.description, 'description', { maxLength: 500 }),
+    description: validateString(body.description ?? '', 'description', { maxLength: 500 }),
     tier: validateEnum(body.tier, 'tier', AGENT_TIERS),
     status: validateOptional(body.status, (v) => validateEnum(v, 'status', AGENT_STATUSES)) ?? 'active',
-    monthly_cost_usd: validateNumber(body.monthly_cost_usd, 'monthly_cost_usd', { min: 0, max: 100000 }),
+    monthly_cost_usd: validateNumber(body.monthly_cost_usd ?? 0, 'monthly_cost_usd', { min: 0, max: 100000 }),
     budget_limit_usd: validateOptional(body.budget_limit_usd, (v) => validateNumber(v, 'budget_limit_usd', { min: 0, max: 1000000 })),
     parent_agent_id: validateOptional(body.parent_agent_id, (v) => validateNumber(v, 'parent_agent_id', { integer: true, min: 1 })),
+    capability_scopes: Array.isArray(body.capability_scopes)
+      ? (body.capability_scopes as string[]).filter((s) => typeof s === 'string').slice(0, 20)
+      : [],
+    escalation_policy: body.escalation_policy
+      ? (body.escalation_policy as { timeout_hours: number; escalate_to: number | null })
+      : { timeout_hours: 24, escalate_to: null },
   }
 }
 

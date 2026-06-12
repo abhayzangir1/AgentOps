@@ -9,6 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1063.0",
     "@aws-sdk/client-dynamodb": "^3.1062.0",
     "@aws-sdk/client-rds": "^3.1062.0",
     "@aws-sdk/lib-dynamodb": "^3.1062.0",
@@ -24,6 +25,7 @@
     "nanoid": "^5.1.11",
     "next": "16.2.6",
     "pg": "^8.21.0",
+    "razorpay": "^2.9.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",

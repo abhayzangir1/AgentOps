@@ -3,9 +3,23 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Agent } from '@/lib/types'
-import { ChevronDown, CircleDot, Pause, Play, Plus, Eye, AlertCircle, RefreshCw } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleDot,
+  Pause,
+  Play,
+  Plus,
+  Eye,
+  AlertCircle,
+  RefreshCw,
+  LayoutList,
+  Network,
+  Shield,
+  Timer,
+} from 'lucide-react'
 import { AgentFormDialog } from './agent-form-dialog'
 import { AgentDetailPanel } from './agent-detail-panel'
+import { OrgChart } from './org-chart'
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error('Failed to fetch')
@@ -22,6 +36,7 @@ export function AgentRegistry() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [view, setView] = useState<'list' | 'org'>('list')
 
   const toggleExpanded = (id: number) => {
     const newSet = new Set(expandedIds)
@@ -118,8 +133,29 @@ export function AgentRegistry() {
 
   return (
     <div className="space-y-4">
-      {/* Header with Create Button */}
-      <div className="flex justify-end">
+      {/* Header with Create Button and View Toggle */}
+      <div className="flex items-center justify-between">
+        {/* View switcher */}
+        <div className="flex items-center gap-1 p-0.5 bg-muted/30 rounded-lg border border-border">
+          <button
+            onClick={() => setView('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <LayoutList size={13} />
+            List
+          </button>
+          <button
+            onClick={() => setView('org')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              view === 'org' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Network size={13} />
+            Org Chart
+          </button>
+        </div>
         <button
           onClick={() => setShowCreateDialog(true)}
           className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
@@ -129,7 +165,8 @@ export function AgentRegistry() {
         </button>
       </div>
 
-      {/* Agent List */}
+      {/* Agent List or Org Chart */}
+      {view === 'list' ? (
       <div className="space-y-3">
       {topLevelAgents.map((agent) => {
         const children = childAgents(agent.id)
@@ -151,7 +188,33 @@ export function AgentRegistry() {
                 />
                 <div className="flex-1">
                   <h4 className="font-medium text-sm">{agent.name}</h4>
-                  <p className="text-xs text-muted-foreground">{agent.tier} • ${agent.monthly_cost_usd}/mo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {agent.tier} · ${agent.monthly_cost_usd}/mo
+                    {agent.budget_limit_usd ? ` · cap $${agent.budget_limit_usd}` : ''}
+                  </p>
+                  {/* Capability scopes */}
+                  {Array.isArray(agent.capability_scopes) && agent.capability_scopes.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <Shield size={10} className="text-muted-foreground/60" />
+                      {agent.capability_scopes.slice(0, 4).map((s) => (
+                        <span key={s} className="text-[10px] bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded">
+                          {s}
+                        </span>
+                      ))}
+                      {agent.capability_scopes.length > 4 && (
+                        <span className="text-[10px] text-muted-foreground/60">+{agent.capability_scopes.length - 4}</span>
+                      )}
+                    </div>
+                  )}
+                  {/* Escalation policy */}
+                  {agent.escalation_policy && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Timer size={10} className="text-muted-foreground/60" />
+                      <span className="text-[10px] text-muted-foreground/60">
+                        Escalate after {agent.escalation_policy.timeout_hours}h
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {children.length > 0 && (
                   <ChevronDown
@@ -214,6 +277,9 @@ export function AgentRegistry() {
         )
       })}
       </div>
+      ) : (
+        <OrgChart onAgentClick={(agent) => setSelectedAgent(agent)} />
+      )}
 
       {/* Create/Edit Dialog */}
       <AgentFormDialog

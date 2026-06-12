@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import { ActivityEvent } from '@/lib/dynamodb'
 import { Agent } from '@/lib/types'
@@ -20,6 +21,80 @@ const fetcher = (url: string) =>
     if (!r.ok) throw new Error('Failed to fetch')
     return r.json()
   })
+
+/**
+ * useActivityStream — connects to the SSE stream at /api/activity/stream.
+ * Falls back to REST polling (via useSWR) if EventSource isn't available or
+ * the stream fails to open within the timeout.
+ */
+function useActivityStream() {
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null)
+  const [usingSse, setUsingSse] = useState(false)
+  const [sseError, setSseError] = useState(false)
+  const esRef = useRef<EventSource | null>(null)
+  const mountedRef = useRef(true)
+
+  const merge = useCallback((incoming: ActivityEvent[]) => {
+    setEvents((prev) => {
+      if (!prev) return incoming.slice(0, 20)
+      const map = new Map<string, ActivityEvent>()
+      for (const e of prev) map.set(e.eventId, e)
+      for (const e of incoming) map.set(e.eventId, e)
+      return Array.from(map.values())
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 20)
+    })
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    if (typeof EventSource === 'undefined') {
+      setSseError(true)
+      return
+    }
+
+    const es = new EventSource('/api/activity/stream')
+    esRef.current = es
+
+    es.onopen = () => {
+      if (mountedRef.current) setUsingSse(true)
+    }
+
+    es.onmessage = (e) => {
+      if (!mountedRef.current) return
+      try {
+        const payload = JSON.parse(e.data) as { type: string; events: ActivityEvent[] }
+        if (payload.events?.length) merge(payload.events)
+      } catch { /* ignore malformed frame */ }
+    }
+
+    es.onerror = () => {
+      if (mountedRef.current) {
+        setSseError(true)
+        setUsingSse(false)
+      }
+      es.close()
+    }
+
+    return () => {
+      mountedRef.current = false
+      es.close()
+    }
+  }, [merge])
+
+  // REST fallback when SSE failed or isn't available
+  const { data: polled, error: pollError, mutate } = useSWR<ActivityEvent[]>(
+    sseError ? '/api/activity?limit=20' : null,
+    fetcher,
+    { refreshInterval: 4000 },
+  )
+
+  const isLoading = events === null && polled === undefined && !pollError && !sseError
+  const error = !usingSse && sseError && pollError ? pollError : null
+  const activities = usingSse ? events : (polled ?? events)
+
+  return { activities, isLoading, error, usingSse, mutate }
+}
 
 const EVENT_META: Record<
   string,
@@ -74,11 +149,7 @@ function formatDuration(ms?: number) {
 }
 
 export function ActivityMonitor() {
-  const { data: activities, isLoading, error, mutate } = useSWR<ActivityEvent[]>(
-    '/api/activity?limit=20',
-    fetcher,
-    { refreshInterval: 4000 },
-  )
+  const { activities, isLoading, error, usingSse, mutate } = useActivityStream()
   const { data: agents } = useSWR<Agent[]>('/api/agents', fetcher, {
     refreshInterval: 30000,
   })
@@ -139,7 +210,9 @@ export function ActivityMonitor() {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
         </span>
-        <span className="text-xs text-emerald-400 font-medium">Live — polling every 4s</span>
+        <span className="text-xs text-emerald-400 font-medium">
+          Live — {usingSse ? 'SSE stream' : 'polling every 4s'}
+        </span>
         <span className="ml-auto text-xs text-muted-foreground">{activities.length} events</span>
       </div>
 

@@ -17,6 +17,7 @@ import {
   Zap,
   X,
 } from 'lucide-react'
+import { CostForecastChart } from './cost-forecast-chart'
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -408,7 +409,10 @@ export function CostDashboard() {
         ))}
       </div>
 
-      {/* Cost by tier */}
+      {/* Cost Intelligence Charts (Forecasting + Breakdown) */}
+      <CostForecastChart agents={agents} />
+
+      {/* Spend by tier */}
       <div className="p-4 rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={15} className="text-muted-foreground" />

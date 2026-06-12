@@ -6,6 +6,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Enable Next.js instrumentation hook (runs once per cold start)
+  experimental: {
+    instrumentationHook: true,
+  },
 }
 
 export default nextConfig

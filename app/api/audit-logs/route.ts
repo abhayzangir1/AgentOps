@@ -7,12 +7,14 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams
     const agentId = searchParams.get('agentId')
 
-    let sql = `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100`
-    const params: any[] = []
+    const limitParam = searchParams.get('limit')
+    const limit = limitParam ? Math.min(parseInt(limitParam, 10), 500) : 200
+    let sql = `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1`
+    const params: unknown[] = [limit]
 
     if (agentId) {
-      sql = `SELECT * FROM audit_logs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 100`
-      params.push(parseInt(agentId))
+      sql = `SELECT * FROM audit_logs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2`
+      params.splice(0, 1, parseInt(agentId), limit)
     }
 
     const result = await query(sql, params)

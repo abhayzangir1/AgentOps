@@ -7,8 +7,8 @@ export async function POST() {
     name: COOKIE_NAME_EXPORT,
     value: '',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none',
     path: '/',
     maxAge: 0,
   })
