@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const { id } = await params
-    const { enabled, events } = await req.json()
+    const { enabled, events, url } = await req.json()
 
     const updateParts: string[] = []
     const values: unknown[] = []
@@ -22,6 +22,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (Array.isArray(events) && events.length > 0) {
       updateParts.push(`events = $${i++}`)
       values.push(events)
+    }
+    if (typeof url === 'string' && url.length > 0) {
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('bad protocol')
+      } catch {
+        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+      }
+      updateParts.push(`url = $${i++}`)
+      values.push(url)
     }
     if (updateParts.length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
