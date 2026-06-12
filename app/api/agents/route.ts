@@ -33,6 +33,26 @@ export async function POST(req: NextRequest) {
     
     const validated = validateAgentInput(body)
 
+    // Starter tier is free but limited to 3 agents. Growth ($49/agent/mo via
+    // Razorpay) and Enterprise (custom) are unlimited here.
+    const STARTER_AGENT_LIMIT = 3
+    const planRes = await query(`SELECT plan FROM users WHERE id = $1`, [userId])
+    const plan: string = planRes.rows[0]?.plan ?? 'starter'
+
+    if (plan === 'starter') {
+      const countRes = await query(`SELECT COUNT(*)::int AS n FROM agents`)
+      if (countRes.rows[0].n >= STARTER_AGENT_LIMIT) {
+        return NextResponse.json(
+          {
+            error: `Starter plan is limited to ${STARTER_AGENT_LIMIT} agents. Upgrade to Growth ($49/agent/month) in Plans & Billing to add more.`,
+            code: 'PLAN_LIMIT_REACHED',
+            limit: STARTER_AGENT_LIMIT,
+          },
+          { status: 403 },
+        )
+      }
+    }
+
     const result = await query(
       `INSERT INTO agents (name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, capability_scopes, escalation_policy)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

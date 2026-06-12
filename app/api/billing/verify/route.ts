@@ -32,8 +32,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ verified: false, error: 'Signature mismatch' }, { status: 400 })
     }
 
-    // Record the upgrade in the immutable audit trail
     const session = await getSession()
+
+    // Persist the plan upgrade on the user record (drives the agent-limit gate)
+    if (session?.userId) {
+      await query(
+        `UPDATE users SET plan = 'growth', razorpay_subscription_id = $2, updated_at = NOW() WHERE id = $1`,
+        [session.userId, razorpay_subscription_id],
+      ).catch((e) => console.error('[v0] Failed to persist plan upgrade:', e))
+    }
+
+    // Record the upgrade in the immutable audit trail
     await query(
       `INSERT INTO audit_logs (agent_id, action, actor_user_id, details)
        VALUES ($1, $2, $3, $4)`,

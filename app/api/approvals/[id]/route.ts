@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { Approval } from '@/lib/types'
 import { getSession } from '@/lib/auth'
+import { dispatchWebhookEvent } from '@/lib/webhooks'
 
 export async function PATCH(
   req: NextRequest,
@@ -76,6 +77,22 @@ export async function PATCH(
          VALUES ($1, $2, $3, $4)`,
         [approval.agent_id, 'approval_modified', userId, JSON.stringify({ approval_id: parseInt(id), notes: notes || 'Payload modified by reviewer' })],
       ).catch(() => {})
+    }
+
+    // Fire external alerts (Slack / Teams / generic) for decisions — fire-and-forget
+    if (status && status !== 'pending') {
+      dispatchWebhookEvent({
+        event: 'approval.decided',
+        title: `Approval #${id} ${status}`,
+        message: `A "${approval.request_type ?? 'agent action'}" request was ${status} by a reviewer.`,
+        severity: status === 'rejected' ? 'warning' : 'info',
+        metadata: {
+          approval_id: parseInt(id),
+          agent_id: approval.agent_id,
+          decision: status,
+          request_type: approval.request_type ?? 'unknown',
+        },
+      }).catch(() => {})
     }
 
     return NextResponse.json(result.rows[0] as Approval)

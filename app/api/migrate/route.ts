@@ -94,6 +94,51 @@ export async function POST() {
       WHERE budget_limit_usd IS NULL
     `)
 
+    // Billing: persist plan + subscription on users (starter is the free default)
+    await query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'starter'
+    `)
+    await query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_subscription_id VARCHAR(64) DEFAULT NULL
+    `)
+
+    // API keys for SDK/programmatic access (only a SHA-256 hash is stored)
+    await query(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        key_prefix VARCHAR(16) NOT NULL,
+        key_hash CHAR(64) NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMPTZ DEFAULT NULL,
+        revoked_at TIMESTAMPTZ DEFAULT NULL
+      )
+    `)
+    await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)`)
+
+    // Webhook alerting configs (Slack / Microsoft Teams / generic JSON)
+    await query(`
+      CREATE TABLE IF NOT EXISTS webhook_configs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider VARCHAR(20) NOT NULL CHECK (provider IN ('slack', 'teams', 'generic')),
+        url TEXT NOT NULL,
+        events TEXT[] NOT NULL DEFAULT '{approval.pending,approval.decided,budget.alert}',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        last_fired_at TIMESTAMPTZ DEFAULT NULL,
+        last_status INTEGER DEFAULT NULL
+      )
+    `)
+    await query(`CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhook_configs(user_id)`)
+
+    // The demo ops account manages a 14-agent fleet — mark it as a Growth
+    // customer so the starter 3-agent limit reflects reality.
+    await query(`
+      UPDATE users SET plan = 'growth' WHERE email = 'ops@company.ai' AND plan = 'starter'
+    `)
+
     return NextResponse.json({ 
       success: true, 
       message: 'Migration completed successfully',
