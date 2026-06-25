@@ -19,14 +19,12 @@ export async function POST(req: NextRequest) {
   try {
     // Record in DynamoDB (real-time activity stream)
     const activity = await recordActivity({
-      eventId: `${agent.agent_id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       agentId: agent.agent_id,
-      agentName: agent.agent_name,
+      eventType: (action_type.includes('delete') ? 'error' : 'execution') as 'execution' | 'error' | 'approval' | 'deployment',
       timestamp: Date.now(),
-      action: action_type,
       description: action_description || `${action_type} executed`,
-      status: status || 'completed',
-      cost: cost ?? 0,
+      status: (status as 'success' | 'pending' | 'failed') || 'success',
+      costUSD: cost ?? 0,
       metadata: metadata || {},
     })
 
