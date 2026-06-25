@@ -28,9 +28,10 @@ if (!API_KEY) {
   process.exit(1)
 }
 
+// Non-null assertion: environment variable is checked above
 const gateway = new AgentGateway({
   baseUrl: BASE_URL,
-  apiKey: API_KEY,
+  apiKey: API_KEY!,
   agentName: 'demo-agent-1',
   timeout: 10000,
 })
@@ -164,7 +165,7 @@ async function main() {
   console.log('AgentOps Demo Agent')
   console.log('='.repeat(70))
   console.log(`Gateway: ${BASE_URL}`)
-  console.log(`API Key: ${API_KEY.slice(0, 20)}...`)
+  console.log(`API Key: ${API_KEY!.slice(0, 20)}...`)
 
   try {
     // Run demo actions in sequence
