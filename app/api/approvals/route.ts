@@ -5,10 +5,18 @@ import { getSession } from '@/lib/auth'
 
 export async function GET() {
   try {
+    const session = await getSession()
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Per-user workspace: only approvals for user's own agents
     const result = await query(
-      `SELECT * FROM approvals 
-       WHERE status IN ('pending', 'approved', 'rejected')
-       ORDER BY created_at DESC`,
+      `SELECT a.* FROM approvals a
+       JOIN agents ag ON a.agent_id = ag.id
+       WHERE ag.owner_user_id = $1 AND a.status IN ('pending', 'approved', 'rejected')
+       ORDER BY a.created_at DESC`,
+      [session.userId],
     )
 
     return NextResponse.json(result.rows as Approval[])

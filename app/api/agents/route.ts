@@ -6,15 +6,23 @@ import { validateAgentInput, ValidationError } from '@/lib/validation'
 
 export async function GET() {
   try {
+    const session = await getSession()
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Per-user workspace isolation: only show agents owned by this user
     const result = await query(
       `SELECT 
         id, name, description, status, tier, parent_agent_id, 
-        monthly_cost_usd, budget_limit_usd,
+        monthly_cost_usd, budget_limit_usd, budget_used_usd,
         COALESCE(capability_scopes, '{}') as capability_scopes,
         escalation_policy,
         created_at, updated_at
       FROM agents 
+      WHERE owner_user_id = $1
       ORDER BY created_at DESC`,
+      [session.userId],
     )
 
     return NextResponse.json(result.rows as Agent[])
@@ -40,7 +48,8 @@ export async function POST(req: NextRequest) {
     const plan: string = planRes.rows[0]?.plan ?? 'starter'
 
     if (plan === 'starter') {
-      const countRes = await query(`SELECT COUNT(*)::int AS n FROM agents`)
+      // Count only THIS USER's agents
+      const countRes = await query(`SELECT COUNT(*)::int AS n FROM agents WHERE owner_user_id = $1`, [userId])
       if (countRes.rows[0].n >= STARTER_AGENT_LIMIT) {
         return NextResponse.json(
           {
@@ -54,11 +63,12 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await query(
-      `INSERT INTO agents (name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, capability_scopes, escalation_policy)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd,
+      `INSERT INTO agents (owner_user_id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, capability_scopes, escalation_policy)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd, budget_used_usd,
          COALESCE(capability_scopes, '{}') as capability_scopes, escalation_policy, created_at, updated_at`,
       [
+        userId,
         validated.name, 
         validated.description, 
         validated.status, 
