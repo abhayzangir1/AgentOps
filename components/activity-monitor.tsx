@@ -53,10 +53,19 @@ function useActivityStream() {
       return
     }
 
+    // SSE timeout: if stream doesn't connect within 5s, fall back to REST polling
+    const ssTimeout = setTimeout(() => {
+      if (!usingSse && mountedRef.current) {
+        setSseError(true)
+        esRef.current?.close()
+      }
+    }, 5000)
+
     const es = new EventSource('/api/activity/stream')
     esRef.current = es
 
     es.onopen = () => {
+      clearTimeout(ssTimeout)
       if (mountedRef.current) setUsingSse(true)
     }
 
@@ -78,6 +87,7 @@ function useActivityStream() {
 
     return () => {
       mountedRef.current = false
+      clearTimeout(ssTimeout)
       es.close()
     }
   }, [merge])
