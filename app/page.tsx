@@ -32,9 +32,13 @@ import { SettingsModal } from '@/components/settings-modal'
 import { PricingPage } from '@/components/pricing-page'
 import { OpsCopilot } from '@/components/ops-copilot'
 import { ConnectAgent } from '@/components/connect-agent'
-import { Plug } from 'lucide-react'
+import { HelpDrawer } from '@/components/help-tooltip'
+import { DocumentationPage } from '@/components/documentation-page'
+import { SimpleAgentOnboarding } from '@/components/simple-agent-onboarding'
+import { GovernanceMonitoring } from '@/components/governance-monitoring'
+import { Plug, Book } from 'lucide-react'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans' | 'connect'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans' | 'connect' | 'help'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -52,6 +56,7 @@ const NAV_TABS: {
   { id: 'permissions',  label: 'Permissions',       icon: GitBranch,       description: 'Hierarchy & access' },
   { id: 'audit',        label: 'Audit Log',         icon: BookOpen,        description: 'Compliance records' },
   { id: 'plans',        label: 'Plans & Billing',   icon: CreditCard,      description: 'SaaS pricing tiers' },
+  { id: 'help',         label: 'Help & Docs',       icon: Book,            description: 'How-to & Terms' },
 ]
 
 function SystemStatusBar() {
@@ -412,8 +417,22 @@ export default function DashboardPage() {
               <PricingPage />
             </div>
           )}
+
+          {activeTab === 'help' && (
+            <DocumentationPage />
+          )}
         </div>
       </main>
+
+      {/* Floating Help Drawer */}
+      <HelpDrawer />
+
+      {/* Governance Monitoring in Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+        <div className="fixed bottom-24 right-4 max-w-xs z-40">
+          <GovernanceMonitoring />
+        </div>
+      )}
 
       <SettingsModal
         open={settingsOpen}
