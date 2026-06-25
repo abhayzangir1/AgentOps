@@ -31,8 +31,10 @@ import { PermissionHierarchy } from '@/components/permission-hierarchy'
 import { SettingsModal } from '@/components/settings-modal'
 import { PricingPage } from '@/components/pricing-page'
 import { OpsCopilot } from '@/components/ops-copilot'
+import { ConnectAgent } from '@/components/connect-agent'
+import { Plug } from 'lucide-react'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans' | 'connect'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -44,6 +46,7 @@ const NAV_TABS: {
 }[] = [
   { id: 'dashboard',    label: 'Dashboard',         icon: LayoutDashboard, description: 'System overview' },
   { id: 'agents',       label: 'Agent Registry',    icon: Bot,             description: 'Manage AI agents' },
+  { id: 'connect',      label: 'Connect Agent',     icon: Plug,            description: 'SDK & integration' },
   { id: 'approvals',    label: 'Approvals',         icon: ShieldCheck,     description: 'Human-in-the-loop' },
   { id: 'costs',        label: 'Cost Intelligence', icon: DollarSign,      description: 'Budget enforcement' },
   { id: 'permissions',  label: 'Permissions',       icon: GitBranch,       description: 'Hierarchy & access' },
@@ -102,6 +105,7 @@ export default function DashboardPage() {
   const [isLoggingOut, startLogout] = useTransition()
 
   const { data: approvals } = useSWR('/api/approvals', fetcher, { refreshInterval: 10000 })
+  const { data: agents } = useSWR('/api/agents', fetcher, { refreshInterval: 30000 })
   const { data: meData, mutate: mutateMe } = useSWR('/api/auth/me', fetcher)
   const user = meData?.user ?? null
 
@@ -386,6 +390,14 @@ export default function DashboardPage() {
               <div className="bg-card border border-border rounded-xl p-5">
                 <PermissionHierarchy />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'connect' && (
+            <div className="max-w-4xl">
+              <ErrorBoundary>
+                <ConnectAgent agents={Array.isArray(agents) ? agents : []} />
+              </ErrorBoundary>
             </div>
           )}
 
