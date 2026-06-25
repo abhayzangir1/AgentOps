@@ -115,7 +115,13 @@ export async function POST() {
         last_used_at TIMESTAMPTZ DEFAULT NULL,
         revoked_at TIMESTAMPTZ DEFAULT NULL
       )
-    `)
+    `).catch(() => {})
+    
+    // If table already exists, ensure agent_id column is present
+    await query(`
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS agent_id INTEGER REFERENCES agents(id) ON DELETE CASCADE
+    `).catch(() => {})
+    
     await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)`)
     await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_agent ON api_keys(agent_id)`)
     await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`)
@@ -162,6 +168,11 @@ export async function POST() {
     await query(`
       UPDATE users SET plan = 'growth' WHERE email = 'ops@company.ai' AND plan = 'starter'
     `)
+
+    // Ensure budget_used_usd column exists (for tracking spend)
+    await query(`
+      ALTER TABLE agents ADD COLUMN IF NOT EXISTS budget_used_usd DECIMAL(10,2) DEFAULT 0
+    `).catch(() => {})
 
     return NextResponse.json({ 
       success: true, 
