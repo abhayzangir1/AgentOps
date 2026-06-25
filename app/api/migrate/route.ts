@@ -107,6 +107,7 @@ export async function POST() {
       CREATE TABLE IF NOT EXISTS api_keys (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
         name VARCHAR(100) NOT NULL,
         key_prefix VARCHAR(16) NOT NULL,
         key_hash CHAR(64) NOT NULL UNIQUE,
@@ -114,8 +115,37 @@ export async function POST() {
         last_used_at TIMESTAMPTZ DEFAULT NULL,
         revoked_at TIMESTAMPTZ DEFAULT NULL
       )
-    `)
+    `).catch(() => {})
+    
+    // If table already exists, ensure agent_id column is present
+    await query(`
+      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS agent_id INTEGER REFERENCES agents(id) ON DELETE CASCADE
+    `).catch(() => {})
+    
     await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)`)
+    await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_agent ON api_keys(agent_id)`)
+    await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`)
+
+    // Gateway requests: track /guard pre-action checks and approval decisions
+    // Agents poll this to learn if their action was approved/denied/still-pending
+    await query(`
+      CREATE TABLE IF NOT EXISTS gateway_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        request_type VARCHAR(100) NOT NULL,
+        request_details JSONB NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+        decision_reason TEXT DEFAULT NULL,
+        decided_by_user_id INTEGER REFERENCES users(id),
+        requested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        decided_at TIMESTAMPTZ DEFAULT NULL,
+        expires_at TIMESTAMPTZ DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
+      )
+    `)
+    await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_agent ON gateway_requests(agent_id)`)
+    await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_status ON gateway_requests(status)`)
+    await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_user ON gateway_requests(user_id)`)
 
     // Webhook alerting configs (Slack / Microsoft Teams / generic JSON)
     await query(`
@@ -138,6 +168,11 @@ export async function POST() {
     await query(`
       UPDATE users SET plan = 'growth' WHERE email = 'ops@company.ai' AND plan = 'starter'
     `)
+
+    // Ensure budget_used_usd column exists (for tracking spend)
+    await query(`
+      ALTER TABLE agents ADD COLUMN IF NOT EXISTS budget_used_usd DECIMAL(10,2) DEFAULT 0
+    `).catch(() => {})
 
     return NextResponse.json({ 
       success: true, 

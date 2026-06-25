@@ -1,9 +1,10 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || 'agentops-default-secret-change-in-prod-32chars',
-)
+if (!process.env.AUTH_SECRET) {
+  throw new Error('AUTH_SECRET environment variable is required')
+}
+const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET)
 const COOKIE_NAME = 'agentops_session'
 const EXPIRES_IN = 60 * 60 * 24 * 7 // 7 days
 

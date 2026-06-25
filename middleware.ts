@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || 'agentops-default-secret-change-in-prod-32chars',
-)
+const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET!)
 const COOKIE_NAME = 'agentops_session'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/signup']
+// Gateway routes authenticate via Bearer tokens (API keys), not session cookies
+const GATEWAY_PATHS = ['/api/v1/guard', '/api/v1/activity', '/api/v1/decision']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths and static assets
+  // Allow public paths, static assets, and gateway routes (they have their own auth via Bearer tokens)
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    GATEWAY_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/icon') ||

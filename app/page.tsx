@@ -31,8 +31,14 @@ import { PermissionHierarchy } from '@/components/permission-hierarchy'
 import { SettingsModal } from '@/components/settings-modal'
 import { PricingPage } from '@/components/pricing-page'
 import { OpsCopilot } from '@/components/ops-copilot'
+import { ConnectAgent } from '@/components/connect-agent'
+import { HelpDrawer } from '@/components/help-tooltip'
+import { DocumentationPage } from '@/components/documentation-page'
+import { SimpleAgentOnboarding } from '@/components/simple-agent-onboarding'
+import { GovernanceMonitoring } from '@/components/governance-monitoring'
+import { Plug, Book } from 'lucide-react'
 
-type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans'
+type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans' | 'connect' | 'help'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -44,11 +50,13 @@ const NAV_TABS: {
 }[] = [
   { id: 'dashboard',    label: 'Dashboard',         icon: LayoutDashboard, description: 'System overview' },
   { id: 'agents',       label: 'Agent Registry',    icon: Bot,             description: 'Manage AI agents' },
+  { id: 'connect',      label: 'Connect Agent',     icon: Plug,            description: 'SDK & integration' },
   { id: 'approvals',    label: 'Approvals',         icon: ShieldCheck,     description: 'Human-in-the-loop' },
   { id: 'costs',        label: 'Cost Intelligence', icon: DollarSign,      description: 'Budget enforcement' },
   { id: 'permissions',  label: 'Permissions',       icon: GitBranch,       description: 'Hierarchy & access' },
   { id: 'audit',        label: 'Audit Log',         icon: BookOpen,        description: 'Compliance records' },
   { id: 'plans',        label: 'Plans & Billing',   icon: CreditCard,      description: 'SaaS pricing tiers' },
+  { id: 'help',         label: 'Help & Docs',       icon: Book,            description: 'How-to & Terms' },
 ]
 
 function SystemStatusBar() {
@@ -102,6 +110,7 @@ export default function DashboardPage() {
   const [isLoggingOut, startLogout] = useTransition()
 
   const { data: approvals } = useSWR('/api/approvals', fetcher, { refreshInterval: 10000 })
+  const { data: agents } = useSWR('/api/agents', fetcher, { refreshInterval: 30000 })
   const { data: meData, mutate: mutateMe } = useSWR('/api/auth/me', fetcher)
   const user = meData?.user ?? null
 
@@ -389,6 +398,14 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {activeTab === 'connect' && (
+            <div className="max-w-4xl">
+              <ErrorBoundary>
+                <ConnectAgent agents={Array.isArray(agents) ? agents : []} />
+              </ErrorBoundary>
+            </div>
+          )}
+
           {activeTab === 'plans' && (
             <div className="max-w-5xl space-y-5">
               <div>
@@ -400,8 +417,22 @@ export default function DashboardPage() {
               <PricingPage />
             </div>
           )}
+
+          {activeTab === 'help' && (
+            <DocumentationPage />
+          )}
         </div>
       </main>
+
+      {/* Floating Help Drawer */}
+      <HelpDrawer />
+
+      {/* Governance Monitoring in Dashboard Tab */}
+      {activeTab === 'dashboard' && (
+        <div className="fixed bottom-24 right-4 max-w-xs z-40">
+          <GovernanceMonitoring />
+        </div>
+      )}
 
       <SettingsModal
         open={settingsOpen}

@@ -21,6 +21,7 @@ async function ensureSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS agents (
       id SERIAL PRIMARY KEY,
+      owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       name VARCHAR(255) NOT NULL,
       description TEXT,
       status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'inactive', 'disabled')),
@@ -28,6 +29,7 @@ async function ensureSchema() {
       parent_agent_id INTEGER REFERENCES agents(id) ON DELETE SET NULL,
       monthly_cost_usd DECIMAL(10,2) DEFAULT 0,
       budget_limit_usd DECIMAL(10,2) DEFAULT NULL,
+      budget_used_usd DECIMAL(10,2) DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )
@@ -47,6 +49,7 @@ async function ensureSchema() {
   await addColumnIfMissing('agents', 'capability_scopes', `TEXT[] DEFAULT '{}'`)
   await addColumnIfMissing('agents', 'escalation_policy', `JSONB DEFAULT '{"timeout_hours":24,"escalate_to":null}'`)
   await addColumnIfMissing('agents', 'owner_user_id', `INTEGER REFERENCES users(id) ON DELETE SET NULL`)
+  await addColumnIfMissing('agents', 'budget_used_usd', `DECIMAL(10,2) DEFAULT 0`)
 
   await query(`CREATE INDEX IF NOT EXISTS idx_agents_parent ON agents(parent_agent_id)`)
   await query(`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`)
