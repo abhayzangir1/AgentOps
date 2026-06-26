@@ -6,6 +6,7 @@ import {
   X, User, Lock, Loader2, CheckCircle2, AlertCircle, KeyRound, Webhook,
   Plus, Trash2, Copy, Send, Power,
 } from 'lucide-react'
+import { copyToClipboard } from '@/lib/utils'
 
 interface SettingsModalProps {
   open: boolean
@@ -293,12 +294,13 @@ function ApiKeysPanel() {
     mutate()
   }
 
-  const copySecret = useCallback(() => {
+  const copySecret = useCallback(async () => {
     if (!newSecret) return
-    navigator.clipboard.writeText(newSecret).then(() => {
+    const ok = await copyToClipboard(newSecret)
+    if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    }
   }, [newSecret])
 
   const activeKeys = data?.keys?.filter((k) => !k.revoked_at) ?? []

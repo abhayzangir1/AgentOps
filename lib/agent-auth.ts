@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { query } from './db'
 
 export interface AuthenticatedAgent {
@@ -73,8 +73,14 @@ export function generateApiKey(): {
   prefix: string
   hash: string
 } {
-  const prefix = Math.random().toString(36).slice(2, 18) // 16 chars
-  const secret = Math.random().toString(36).slice(2, 32) // 30 chars (random)
+  // Use cryptographically secure randomness (NOT Math.random, which is
+  // predictable and unsuitable for secrets). base64url avoids '_' so the
+  // agk_<prefix>_<secret> structure stays unambiguous when splitting on '_'.
+  const toBase64Url = (buf: Buffer) =>
+    buf.toString('base64').replace(/\+/g, 'A').replace(/\//g, 'B').replace(/=/g, '')
+
+  const prefix = toBase64Url(randomBytes(12)).slice(0, 16) // 16 chars
+  const secret = toBase64Url(randomBytes(32)).slice(0, 43) // ~256 bits of entropy
   const fullKey = `agk_${prefix}_${secret}`
   const hash = createHash('sha256').update(fullKey).digest('hex')
 

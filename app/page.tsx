@@ -32,10 +32,7 @@ import { SettingsModal } from '@/components/settings-modal'
 import { PricingPage } from '@/components/pricing-page'
 import { OpsCopilot } from '@/components/ops-copilot'
 import { ConnectAgent } from '@/components/connect-agent'
-import { HelpDrawer } from '@/components/help-tooltip'
 import { DocumentationPage } from '@/components/documentation-page'
-import { SimpleAgentOnboarding } from '@/components/simple-agent-onboarding'
-import { GovernanceMonitoring } from '@/components/governance-monitoring'
 import { Plug, Book } from 'lucide-react'
 
 type TabType = 'dashboard' | 'agents' | 'approvals' | 'costs' | 'audit' | 'permissions' | 'plans' | 'connect' | 'help'
@@ -423,16 +420,6 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
-
-      {/* Floating Help Drawer */}
-      <HelpDrawer />
-
-      {/* Governance Monitoring in Dashboard Tab */}
-      {activeTab === 'dashboard' && (
-        <div className="fixed bottom-24 right-4 max-w-xs z-40">
-          <GovernanceMonitoring />
-        </div>
-      )}
 
       <SettingsModal
         open={settingsOpen}

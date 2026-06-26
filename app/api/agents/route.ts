@@ -35,7 +35,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession()
-    const userId = session?.userId ?? 1
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.userId
 
     const body = await req.json()
     

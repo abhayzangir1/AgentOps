@@ -5,10 +5,26 @@ import { getSession } from '@/lib/auth'
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
-    const userId = session?.userId ?? 1
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.userId
 
     const { id } = await params
     const agentId = parseInt(id, 10)
+    if (Number.isNaN(agentId)) {
+      return NextResponse.json({ error: 'Invalid agent id' }, { status: 400 })
+    }
+
+    // Ownership check: the agent must belong to the requesting user
+    const ownerRes = await query('SELECT owner_user_id FROM agents WHERE id = $1', [agentId])
+    if (ownerRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+    if (ownerRes.rows[0].owner_user_id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await req.json()
     const { status, name, description, tier, monthly_cost_usd, budget_limit_usd, parent_agent_id, capability_scopes, escalation_policy } = body
 
@@ -59,9 +75,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     updates.push(`updated_at = NOW()`)
     values.push(agentId)
+    values.push(userId)
 
     const result = await query(
-      `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIndex}
+      `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIndex} AND owner_user_id = $${paramIndex + 1}
        RETURNING id, name, description, status, tier, parent_agent_id, monthly_cost_usd, budget_limit_usd,
          COALESCE(capability_scopes, '{}') as capability_scopes, escalation_policy, created_at, updated_at`,
       values,
@@ -99,19 +116,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
-    const userId = session?.userId ?? 1
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.userId
 
     const { id } = await params
     const agentId = parseInt(id, 10)
+    if (Number.isNaN(agentId)) {
+      return NextResponse.json({ error: 'Invalid agent id' }, { status: 400 })
+    }
 
-    // Get agent name for audit log before deletion
-    const agentResult = await query('SELECT name FROM agents WHERE id = $1', [agentId])
+    // Get agent name for audit log + verify ownership before deletion
+    const agentResult = await query(
+      'SELECT name, owner_user_id FROM agents WHERE id = $1',
+      [agentId],
+    )
     if (agentResult.rows.length === 0) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
+    if (agentResult.rows[0].owner_user_id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const agentName = agentResult.rows[0].name
 
-    const result = await query('DELETE FROM agents WHERE id = $1 RETURNING id', [agentId])
+    const result = await query(
+      'DELETE FROM agents WHERE id = $1 AND owner_user_id = $2 RETURNING id',
+      [agentId, userId],
+    )
 
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
