@@ -10,9 +10,32 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession()
-    const userId = session?.userId ?? 1
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.userId
 
     const { id } = await params
+    const approvalId = parseInt(id, 10)
+    if (Number.isNaN(approvalId)) {
+      return NextResponse.json({ error: 'Invalid approval id' }, { status: 400 })
+    }
+
+    // Ownership check: the approval must belong to one of the user's agents
+    const ownerRes = await query(
+      `SELECT a.owner_user_id
+         FROM approvals ap
+         JOIN agents a ON a.id = ap.agent_id
+        WHERE ap.id = $1`,
+      [approvalId],
+    )
+    if (ownerRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Approval not found' }, { status: 404 })
+    }
+    if (ownerRes.rows[0].owner_user_id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await req.json()
     const { status, notes, assigned_to_user_id, request_details } = body
 
@@ -49,7 +72,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    values.push(parseInt(id))
+    values.push(approvalId)
 
     const result = await query(
       `UPDATE approvals 

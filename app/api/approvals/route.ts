@@ -61,7 +61,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession()
-    const userId = session?.userId ?? 1
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.userId
 
     const body = await req.json()
     const {
@@ -69,6 +72,15 @@ export async function POST(req: NextRequest) {
       request_type,
       request_details,
     } = body
+
+    // Verify the target agent belongs to the requesting user
+    const ownerRes = await query('SELECT owner_user_id FROM agents WHERE id = $1', [agent_id])
+    if (ownerRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+    if (ownerRes.rows[0].owner_user_id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const result = await query(
       `INSERT INTO approvals (agent_id, request_type, request_details, requested_by_user_id, status)

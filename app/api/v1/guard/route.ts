@@ -33,12 +33,13 @@ export async function POST(req: NextRequest) {
     status: agentStatus,
   } = agentRes.rows[0]
 
-  // Check 1: Agent status (active, paused, frozen)
-  if (agentStatus === 'frozen') {
+  // Check 1: Agent status. 'disabled' is the budget-overspend lockout state
+  // (the agents.status CHECK constraint allows active/paused/inactive/disabled).
+  if (agentStatus === 'disabled' || agentStatus === 'inactive') {
     return NextResponse.json(
       {
         decision: 'denied',
-        reason: 'Agent is frozen due to budget overspend',
+        reason: 'Agent is disabled (budget overspend or deactivated by administrator)',
         request_id: null,
       },
       { status: 403 },
@@ -73,13 +74,14 @@ export async function POST(req: NextRequest) {
   const cost = estimated_cost ?? 0
   const projectedTotal = (budgetUsed ?? 0) + cost
   if (budgetLimit && projectedTotal > budgetLimit) {
-    // Auto-freeze the agent to prevent further spend
-    await query(`UPDATE agents SET status = 'frozen' WHERE id = $1`, [agent.agent_id]).catch(() => {})
+    // Auto-disable the agent to prevent further spend ('disabled' is the
+    // budget lockout state allowed by the agents.status CHECK constraint).
+    await query(`UPDATE agents SET status = 'disabled', updated_at = NOW() WHERE id = $1`, [agent.agent_id])
 
     return NextResponse.json(
       {
         decision: 'denied',
-        reason: `Projected cost $${projectedTotal.toFixed(2)} exceeds budget limit $${budgetLimit.toFixed(2)}. Agent frozen.`,
+        reason: `Projected cost $${projectedTotal.toFixed(2)} exceeds budget limit $${budgetLimit.toFixed(2)}. Agent disabled.`,
         request_id: null,
       },
       { status: 403 },

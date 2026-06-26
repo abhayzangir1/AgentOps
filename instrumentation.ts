@@ -91,9 +91,69 @@ export async function register() {
         )
       `)
 
+      // Billing columns on users (starter is the free default plan)
+      await addColIfMissing('users', 'plan', `VARCHAR(20) NOT NULL DEFAULT 'starter'`)
+      await addColIfMissing('users', 'razorpay_subscription_id', `VARCHAR(64) DEFAULT NULL`)
+
+      // API keys for SDK/programmatic agent access (only a SHA-256 hash is stored)
+      await query(`
+        CREATE TABLE IF NOT EXISTS api_keys (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          name VARCHAR(100) NOT NULL,
+          key_prefix VARCHAR(16) NOT NULL,
+          key_hash CHAR(64) NOT NULL UNIQUE,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          last_used_at TIMESTAMPTZ DEFAULT NULL,
+          revoked_at TIMESTAMPTZ DEFAULT NULL
+        )
+      `)
+      await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)`)
+      await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_agent ON api_keys(agent_id)`)
+      await query(`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`)
+
+      // Gateway requests: track /guard pre-action checks and HITL decisions.
+      // Agents poll this to learn if an action was approved/denied/still-pending.
+      await query(`
+        CREATE TABLE IF NOT EXISTS gateway_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          request_type VARCHAR(100) NOT NULL,
+          request_details JSONB NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+          decision_reason TEXT DEFAULT NULL,
+          decided_by_user_id INTEGER REFERENCES users(id),
+          requested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          decided_at TIMESTAMPTZ DEFAULT NULL,
+          expires_at TIMESTAMPTZ DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
+        )
+      `)
+      await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_agent ON gateway_requests(agent_id)`)
+      await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_status ON gateway_requests(status)`)
+      await query(`CREATE INDEX IF NOT EXISTS idx_gateway_requests_user ON gateway_requests(user_id)`)
+
+      // Webhook alerting configs (Slack / Microsoft Teams / generic JSON)
+      await query(`
+        CREATE TABLE IF NOT EXISTS webhook_configs (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          provider VARCHAR(20) NOT NULL CHECK (provider IN ('slack', 'teams', 'generic')),
+          url TEXT NOT NULL,
+          events TEXT[] NOT NULL DEFAULT '{approval.pending,approval.decided,budget.alert}',
+          enabled BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          last_fired_at TIMESTAMPTZ DEFAULT NULL,
+          last_status INTEGER DEFAULT NULL
+        )
+      `)
+      await query(`CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhook_configs(user_id)`)
+
       // Indexes
       await query(`CREATE INDEX IF NOT EXISTS idx_agents_parent ON agents(parent_agent_id)`)
       await query(`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`)
+      await query(`CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents(owner_user_id)`)
       await query(`CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)`)
       await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC)`)
 
