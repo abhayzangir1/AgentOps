@@ -2,7 +2,7 @@
 
 > **Jira meets Workday for your AI workforce.** AgentOps is a production-grade B2B platform for governing, monitoring, and controlling fleets of autonomous AI agents — with human-in-the-loop approvals, real-time cost controls, recursive permission inheritance, and an AI ops copilot.
 
-**Live demo:** https://v0-agentops-platform-build.vercel.app
+**Live demo:** https://v0-agentops-platform-build-ozdjtqp7s-abhay-zangir.vercel.app/
 
 **Demo login:** `ops@company.ai` / `AgentOps2024!`  _(or click "Fill demo credentials" on the login screen)_
 
