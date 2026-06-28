@@ -6,7 +6,6 @@
 
 **Demo login:** `ops@company.ai` / `AgentOps2024!`  _(or click "Fill demo credentials" on the login screen)_
 
-**📋 For Judges/Evaluators:** See [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) for a step-by-step walkthrough verifying that this is a production-ready system with real agent connectivity, real databases, and real privacy isolation (not a mockup).
 
 ---
 
@@ -142,9 +141,7 @@ lib/              db.ts (Aurora), dynamodb.ts, bedrock.ts, razorpay.ts, webhooks
 ## Further Documentation
 
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — deep-dive on the dual-database design and data flow
-- [`HACKATHON_SETUP.md`](./HACKATHON_SETUP.md) — full environment + AWS setup walkthrough
-- [`MANUAL.md`](./MANUAL.md) — end-user product manual
-- [`QUICK_START.md`](./QUICK_START.md) — fastest path to a running instance
+
 
 ---
 
